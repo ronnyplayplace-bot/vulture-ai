@@ -71,7 +71,6 @@ cloning, LoRA training) need beefier hardware than what it's being built on righ
 If the project is useful to you and you'd like to help it grow, anything is appreciated —
 it goes **straight into hardware** to unlock the next features:
 
-- 💜 **GitHub Sponsors:** [github.com/sponsors/ronnyplayplace-bot](https://github.com/sponsors/ronnyplayplace-bot)
 - ₿ **Crypto:**
   - **BTC** (Bitcoin network): `37W7Djk14P9kw3Gx3zWLNXpTyRcSJfrwSe`
   - **ETH** (Ethereum network): `0x30d7d100fe6606a0860786dacb975c7f7723852c`
