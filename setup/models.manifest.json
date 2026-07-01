@@ -189,6 +189,8 @@
       "license_note": "Free to use with credit (Kim2091).",
       "license": "CC-BY-NC-SA-4.0",
       "noncommercial": true,
+      "page_url": "https://huggingface.co/lokCX/4x-Ultrasharp",
+      "manual_note": "Download 4x-UltraSharp.pth.",
       "required": true
     },
 
@@ -201,6 +203,8 @@
       "license_note": "InsightFace -- NON-COMMERCIAL / research use only.",
       "license": "InsightFace non-commercial",
       "noncommercial": true,
+      "page_url": "https://huggingface.co/ezioruan/inswapper_128.onnx",
+      "manual_note": "Download inswapper_128.onnx.",
       "required": false
     },
     {
@@ -212,6 +216,8 @@
       "license_note": "InsightFace -- NON-COMMERCIAL / research use only. Zip is extracted into models/buffalo_l/.",
       "license": "InsightFace non-commercial",
       "noncommercial": true,
+      "page_url": "https://github.com/deepinsight/insightface/releases/tag/v0.7",
+      "manual_note": "Download buffalo_l.zip (under the v0.7 assets) and unzip it into the folder.",
       "required": false
     },
     {
@@ -223,6 +229,8 @@
       "license_note": "S-Lab License 1.0 -- NON-COMMERCIAL. Used for edge smoothing after face-swap.",
       "license": "S-Lab License 1.0 (non-commercial)",
       "noncommercial": true,
+      "page_url": "https://github.com/sczhou/CodeFormer/releases/tag/v0.1.0",
+      "manual_note": "Download codeformer.pth.",
       "required": false
     },
 
@@ -235,6 +243,8 @@
       "license_note": "LivePortrait (KwaiVGI) -- research use; MIT wrapper. The KJ node can also auto-download these on first run.",
       "license": "MIT weights, ships non-commercial InsightFace",
       "noncommercial": true,
+      "page_url": "https://huggingface.co/Kijai/LivePortrait_safetensors",
+      "manual_note": "Grab the .safetensors files. The page's 'unsafe' flag is only an old, optional landmark_model.pth (a pickle) - skip it, it is not needed.",
       "required": false
     },
 

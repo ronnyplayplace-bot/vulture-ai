@@ -1435,6 +1435,9 @@ def open_setup_window():
             meta=tk.Frame(row,bg=CARD); meta.pack(side="left",fill="x",expand=True,padx=(4,0))
             tk.Label(meta,text=it["name"],font=small_f,bg=CARD,fg=FG,anchor="w").pack(anchor="w")
             tk.Label(meta,text=it["license"],font=small_f,bg=CARD,fg=SUB,anchor="w").pack(anchor="w")
+            if it.get("note"):
+                tk.Label(meta,text=it["note"],font=small_f,bg=CARD,fg=ACCENT_LT,anchor="w",
+                         wraplength=540,justify="left").pack(anchor="w")
     def _man_refresh():
         if not have_installer:
             _man_render("Installer not found — cannot list manual models."); return
@@ -1451,8 +1454,9 @@ def open_setup_window():
                     parts=line.split("\t")
                     if len(parts)<6: continue
                     _tag,name,lic,page,target,present=parts[:6]
+                    note=parts[6] if len(parts)>=7 else ""
                     items.append({"name":name,"license":lic,"page":page,
-                                  "target":target,"present":present.strip()=="1"})
+                                  "target":target,"present":present.strip()=="1","note":note})
                 win.after(0,lambda:_man_render(items))
             except Exception as e:
                 win.after(0,lambda m=str(e):_man_render("Could not list manual models: "+m))

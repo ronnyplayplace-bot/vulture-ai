@@ -447,10 +447,11 @@ def step_models(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
         # licenses; the user fetches them and drops them in the folder themselves.)
         if m.get("noncommercial"):
             lic = m.get("license") or m.get("license_note") or "non-commercial"
-            page = source_page(m.get("source", {}))
+            page = m.get("page_url") or source_page(m.get("source", {}))
             target = model_target_path(live, m)
+            note = m.get("manual_note", "")
             info(f"MANUAL (non-commercial, get it yourself): {m['name']} [{lic}] "
-                 f"-> download from {page} and place at {target}")
+                 f"-> open {page} and place at {target}" + (f"  ({note})" if note else ""))
             nc_skipped += 1
             continue
         required = m.get("required", False)
@@ -713,10 +714,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             if not m.get("noncommercial"):
                 continue
             lic = m.get("license") or m.get("license_note") or "non-commercial"
-            page = source_page(m.get("source", {}))
+            page = m.get("page_url") or source_page(m.get("source", {}))
             target = model_target_path(cfg, m)
             present = 1 if os.path.exists(target) else 0
-            print(f"MANUAL\t{m['name']}\t{lic}\t{page}\t{target}\t{present}")
+            note = (m.get("manual_note", "") or "").replace("\t", " ").replace("\n", " ")
+            print(f"MANUAL\t{m['name']}\t{lic}\t{page}\t{target}\t{present}\t{note}")
         return 0
 
     banner("Vulture AI  --  bootstrap installer")
