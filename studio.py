@@ -1249,6 +1249,11 @@ def open_setup_window():
     req_link=tk.Label(win,text="📋 Requirements & licenses",font=small_f,bg=BG,fg=ACCENT_LT,cursor="hand2")
     req_link.pack(pady=(0,6)); req_link.bind("<Button-1>",lambda e:open_requirements_window())
 
+    # --- Fixed status bar at the bottom: always visible, never scrolls away ---
+    fixed_st=tk.Label(win,text="Ready.",font=sub_f,bg=PANEL,fg=GREEN,anchor="w",
+                      wraplength=680,justify="left",padx=12,pady=8)
+    fixed_st.pack(side="bottom",fill="x")
+
     # --- Scrollable body: content can exceed the window; scroll with wheel / scrollbar ---
     _scwrap=tk.Frame(win,bg=BG); _scwrap.pack(fill="both",expand=True)
     _canvas=tk.Canvas(_scwrap,bg=BG,highlightthickness=0)
@@ -1367,7 +1372,12 @@ def open_setup_window():
 
     st=tk.Label(body,text="Ready." if have_installer else "Installer not found.",
                 font=sub_f,bg=BG,fg=GREEN,wraplength=660)
-    def set_st(t): win.after(0,lambda:st.config(text=t))
+    def set_st(t, busy=False):
+        def _apply():
+            fixed_st.config(text=t, fg=(ACCENT_LT if busy else GREEN))
+            try: st.config(text=t)
+            except Exception: pass
+        win.after(0,_apply)
 
     btnrow=tk.Frame(body,bg=BG); btnrow.pack(fill="x",padx=24,pady=(2,2))
     install_btn=tk.Button(btnrow,text="⤓  Install everything",font=btn_f,bg=ACCENT,fg="#ffffff",
@@ -1475,13 +1485,14 @@ def open_setup_window():
             log.config(state="normal"); log.delete("1.0","end"); log.config(state="disabled")
         win.after(0,_do)
 
-    def run_installer(args, label):
+    def run_installer(args, label, start_msg=None):
         # Stream `python setup/install.py [args]` line-by-line into the log box.
         # All subprocess reads happen here in the worker thread; every widget
         # update goes through win.after -> the Tk main thread is never blocked.
         def worker():
             win.after(0,lambda:(install_btn.config(state="disabled"),check_btn.config(state="disabled")))
-            set_st(label+" …")
+            set_st(start_msg or (label+" running… live progress in the log below ↓"), busy=True)
+            win.after(0,lambda:(_canvas.update_idletasks(), _canvas.yview_moveto(1.0)))  # reveal the log
             _log_clear()
             py=cfg.system_python or sys.executable
             _log(f"$ \"{py}\" setup/install.py {' '.join(args)}\n\n")
@@ -1510,8 +1521,9 @@ def open_setup_window():
         if not _ollama_ready():
             set_st("Install the Ollama desktop app first (ollama.com) — Vulture needs it for the local LLMs.")
             return
-        args=[]
-        run_installer(args, "Install")
+        run_installer([], "Install",
+            "Installing… downloading ComfyUI + tens of GB of models — this can take 30–90 min "
+            "depending on your connection. Live progress in the log below ↓.")
     def do_check():
         args=["--list"]
         run_installer(args, "Check")
