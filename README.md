@@ -63,6 +63,39 @@ no terminal.
   </tr>
 </table>
 
+## Get started
+
+**Prerequisites — install these yourself first:** Windows · an NVIDIA GPU (6 GB+ VRAM) ·
+[Python 3.11](https://www.python.org/downloads/) (tick *Add python.exe to PATH*) ·
+[Git](https://git-scm.com/download/win) · the [Ollama app](https://ollama.com/download)
+(runs the local chat & coding models) · ~100 GB free disk.
+
+**The easy way — no terminal:**
+1. Download this repo (green **Code** button → *Download ZIP*) and unzip it.
+2. Double-click **`INSTALL.cmd`** — it downloads ComfyUI + the models and opens the app.
+3. In the app, open **⚙ Setup** → pick your drive → **Install everything**.
+
+**Prefer the terminal:**
+```bat
+git clone https://github.com/ronnyplayplace-bot/vulture-ai.git
+cd vulture-ai
+python setup/install.py
+python studio.py
+```
+
+> ⚠️ **If your C: drive is full:** set the install location to another drive first —
+> open **⚙ Setup → 📁 Choose folder** before installing (the plain `INSTALL.cmd` defaults
+> to `%LOCALAPPDATA%` on C:).
+
+**Non-commercial models** (face-swap / InsightFace, CodeFormer, the 4x-UltraSharp upscaler,
+LivePortrait) are personal / research use only — **Vulture never downloads those.** The
+**⚙ Setup → Manual models** section links you to each source and checks once you've placed
+the file. Everything else installs by default and is fine for commercial use — see
+[NOTICE](NOTICE).
+
+**The full landing page** lives in [`site/`](site/) — double-click `site/index.html`
+(or run `python -m http.server` in that folder) to view it locally.
+
 ## Runs on modest hardware
 
 Most of this runs on a **GTX 1060 6GB**. It's slow on old cards, but it *works*.

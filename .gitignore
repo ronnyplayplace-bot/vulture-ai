@@ -83,3 +83,11 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+
+# Landing page assets (shipped for local viewing)
+!site/
+!site/**/*.png
+!site/**/*.jpg
+!site/**/*.jpeg
+!site/**/*.webp
+!site/**/*.svg

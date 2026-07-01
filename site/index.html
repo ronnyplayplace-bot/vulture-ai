@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- ── Primary meta ─────────────────────────────────────── -->
+  <title>Vulture AI — Fully offline, private AI creative studio</title>
+  <meta name="description" content="A 100% local, offline, private and free AI creative studio in one clean window. Image generation, 4K upscaling, img2img, image-to-3D, face-swap, lip-sync, local chat, a coding agent and code-RAG — all on your own machine. Open source, MIT. By Overlkd Studio.">
+  <meta name="keywords" content="offline AI, local AI studio, private AI, ComfyUI, Ollama, image generation, face swap, lip sync, image to 3D, coding agent, open source AI, Vulture AI">
+  <meta name="author" content="Overlkd Studio">
+  <meta name="theme-color" content="#0a0a0a">
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="https://ai.overlkd.com/">
+
+  <!-- ── Open Graph ───────────────────────────────────────── -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Vulture AI">
+  <meta property="og:title" content="Vulture AI — Fully offline, private AI creative studio">
+  <meta property="og:description" content="It sees everything — nothing leaves your machine. Local. Offline. Free. Open source. Image, 3D, face-swap, lip-sync, chat and a coding agent, all on your own GPU.">
+  <meta property="og:url" content="https://ai.overlkd.com/">
+  <meta property="og:image" content="https://ai.overlkd.com/assets/og-cover.svg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Vulture AI — an eye mark with the wordmark and the tagline: it sees everything, nothing leaves your machine.">
+  <meta property="og:locale" content="en_US">
+
+  <!-- ── Twitter / X card ─────────────────────────────────── -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Vulture AI — Fully offline, private AI creative studio">
+  <meta name="twitter:description" content="It sees everything — nothing leaves your machine. A free, open-source, 100% offline AI studio in one clean window.">
+  <meta name="twitter:image" content="https://ai.overlkd.com/assets/og-cover.svg">
+  <meta name="twitter:image:alt" content="Vulture AI wordmark and tagline on a dark purple background.">
+
+  <!-- ── Icons & fonts ────────────────────────────────────── -->
+  <link rel="icon" href="favicon.png?v=1" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=13">
+
+  <!-- ── Structured data: the app ─────────────────────────── -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Vulture AI",
+    "applicationCategory": "MultimediaApplication",
+    "operatingSystem": "Windows",
+    "url": "https://ai.overlkd.com/",
+    "description": "A 100% local, offline, private and free AI creative studio in one clean window: image generation with a prompt optimizer, 4K upscaling, image-to-image, image-to-3D, face-swap, lip-sync, local chat, a coding agent with an auto-splitter and code-RAG. Runs on modest NVIDIA hardware. Nothing leaves your machine.",
+    "softwareVersion": "0.9 (work in progress)",
+    "license": "https://opensource.org/licenses/MIT",
+    "downloadUrl": "https://github.com/ronnyplayplace-bot/vulture-ai",
+    "isAccessibleForFree": true,
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "author": {
+      "@type": "Organization",
+      "name": "Overlkd Studio",
+      "url": "https://www.overlkd.com"
+    },
+    "featureList": [
+      "Offline image generation with prompt optimizer",
+      "4K upscaling",
+      "Image-to-image",
+      "Image-to-3D",
+      "Face-swap",
+      "Lip-sync",
+      "Local chat",
+      "Coding agent with auto-splitter",
+      "Code-RAG semantic search"
+    ]
+  }
+  </script>
+
+  <!-- ── Structured data: FAQ ─────────────────────────────── -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Is Vulture AI really free?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Vulture AI is free and open source under the MIT license. There are no subscriptions, no API keys and no paywalls. Donations are welcome but never required."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does my data ever leave my machine?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Every model runs locally on your own GPU. After the one-time setup download, Vulture AI works fully offline — no cloud, no telemetry, no trackers. Your prompts, images and files never leave your computer."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What hardware do I need?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "A Windows PC with an NVIDIA GPU. 6 GB of VRAM is the minimum (a GTX 1060 works), 12 GB or more is recommended for speed. You also need roughly 100 GB of free disk space for the models."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Which models does it use?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Open models such as FLUX and Stable Diffusion for images, TripoSR and Hunyuan3D for 3D, plus Ollama models like Qwen and DeepSeek-R1 for chat and coding. Models are downloaded from their original sources during setup — they are not bundled with the app."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I use it commercially?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The Vulture launcher/UI is MIT, so yes — including commercially. But it only runs third-party models, and a few are non-commercial by their authors' rules. Fine to sell: images from the default FLUX.1-schnell, SD1.5, 3D via TripoSR, and the local LLMs (Qwen, DeepSeek). Personal / research only: face-swap (InsightFace), CodeFormer, the 4x-UltraSharp upscaler, FLUX.1-dev, LivePortrait, and Hunyuan3D (scale/region limited). Vulture only downloads the non-commercial ones after you explicitly accept. See the NOTICE file for details."
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <nav class="topbar" aria-label="Primary">
+    <a class="topbar__back" href="https://www.overlkd.com">&larr; Overlkd Studio</a>
+    <a class="topbar__gh" href="https://github.com/ronnyplayplace-bot/vulture-ai" target="_blank" rel="noopener noreferrer">GitHub &#8599;</a>
+  </nav>
+
+  <main id="main">
+
+  <!-- HERO -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero__noise" aria-hidden="true"></div>
+    <div class="hero__glow" aria-hidden="true"></div>
+    <img class="hero__bg-logo" src="assets/logo.png" alt="" aria-hidden="true">
+    <div class="hero__content">
+      <img class="hero__logo" src="assets/logo.png?v=1" alt="Vulture AI logo — a geometric vulture in flight" width="160" height="109">
+      <p class="hero__status"><span class="dot" aria-hidden="true"></span>Open Source · Coming Soon</p>
+      <h1 class="hero__title" id="hero-title">
+        <span class="hero__line">VULTURE</span><span class="hero__line hero__line--stroke">AI</span>
+      </h1>
+      <p class="hero__sub">A fully offline, private AI creative studio — in one clean app.</p>
+      <div class="hero__actions">
+        <a class="btn btn--primary" href="#quickstart">Get started</a>
+        <a class="btn btn--ghost" href="#features">See what it does</a>
+      </div>
+    </div>
+    <a class="hero__scroll" href="#manifesto" aria-label="Scroll to content"><span class="hero__scroll-track" aria-hidden="true"></span></a>
+  </section>
+
+  <!-- MANIFESTO -->
+  <section class="manifesto" id="manifesto" aria-labelledby="manifesto-title">
+    <div class="manifesto__inner">
+      <p class="manifesto__eyebrow reveal">100% local · offline · private · free · open source</p>
+      <h2 class="manifesto__quote reveal" id="manifesto-title">
+        <span class="manifesto__q-line">It sees everything —</span>
+        <span class="manifesto__q-line manifesto__q-line--accent">nothing leaves your machine.</span>
+      </h2>
+      <p class="manifesto__body reveal">No cloud. No API keys. No subscriptions. Every model runs on your own hardware, and your data never goes anywhere. Just one clean window — no node spaghetti, no terminal.</p>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="sec" id="features" aria-labelledby="features-title">
+    <p class="sec__label reveal">What it does — all offline</p>
+    <h2 class="sec__title reveal" id="features-title">One window.<br><span class="accent">Everything</span> local.</h2>
+    <div class="features">
+      <article class="feat reveal"><span class="feat__icon" aria-hidden="true">🎨</span><h3 class="feat__name">Image Generation</h3><p class="feat__desc">FLUX + several SD models, with a built-in prompt optimizer that turns casual text into a proper prompt.</p></article>
+      <article class="feat reveal"><span class="feat__icon" aria-hidden="true">🔍</span><h3 class="feat__name">4K Upscaling</h3><p class="feat__desc">4x-UltraSharp + tiled Ultimate SD Upscale — real added detail, not just a resize.</p></article>
+      <article class="feat reveal"><span class="feat__icon" aria-hidden="true">🖼️</span><h3 class="feat__name">Image → Image</h3><p class="feat__desc">Rework and reimagine any image with a prompt.</p></article>
+      <article class="feat reveal"><span class="feat__icon" aria-hidden="true">🧊</span><h3 class="feat__name">Image → 3D</h3><p class="feat__desc">Turn a photo into a 3D model (.obj) with TripoSR / Hunyuan3D.</p></article>
+      <article class="feat reveal"><span class="feat__icon" aria-hidden="true">🎭</span><h3 class="feat__name">Face-Swap</h3><p class="feat__desc">Swap faces between photos, fully offline.</p></article>
+      <article class="feat reveal"><span class="feat__icon" aria-hidden="true">👄</span><h3 class="feat__name">Lip-Sync</h3><p class="feat__desc">Bring a still photo to life — expression, lips, head motion, with audio.</p></article>
+      <article class="feat reveal"><span class="feat__icon" aria-hidden="true">💬</span><h3 class="feat__name">Local Chat</h3><p class="feat__desc">Ollama models (Qwen, DeepSeek-R1, vision) behind a clean dashboard.</p></article>
+      <article class="feat reveal"><span class="feat__icon" aria-hidden="true">💻</span><h3 class="feat__name">Coding Agent</h3><p class="feat__desc">A local coding assistant with an auto test→repair loop and an auto-splitter for big tasks.</p></article>
+      <article class="feat reveal"><span class="feat__icon" aria-hidden="true">🧠</span><h3 class="feat__name">Code-RAG</h3><p class="feat__desc">Semantic search across your own projects with Qdrant + embeddings.</p></article>
+    </div>
+  </section>
+
+  <!-- SCREENSHOTS -->
+  <section class="sec" id="screenshots" aria-labelledby="shots-title">
+    <p class="sec__label reveal">A look inside</p>
+    <h2 class="sec__title reveal" id="shots-title">One clean<br><span class="accent">window.</span></h2>
+    <figure class="frame reveal">
+      <img class="frame__img" src="assets/studio.jpg?v=3" alt="The Vulture AI studio dashboard: image generation, 4K upscaling, image-to-3D, face-swap, lip-sync, local chat and a coding agent, all in one window." loading="lazy" decoding="async">
+      <figcaption class="frame__cap">The dashboard — every tool in one window. No node graphs, no terminal.</figcaption>
+    </figure>
+
+    <div class="gallery">
+      <figure class="gallery__item reveal">
+        <img class="gallery__img" src="assets/gallery/create-images.png" alt="The Create images window — a FLUX text-to-image generator with a built-in prompt optimizer, HD and 4K upscaling, and image-to-image." loading="lazy" decoding="async">
+        <figcaption class="gallery__cap"><strong>Create images</strong> — FLUX + prompt optimizer, HD / 4K upscale, img2img.</figcaption>
+      </figure>
+      <figure class="gallery__item reveal">
+        <img class="gallery__img" src="assets/gallery/image-3d.png" alt="The Image to 3D window — turn a photo into a textured 3D .obj model for Mixamo or Meshy." loading="lazy" decoding="async">
+        <figcaption class="gallery__cap"><strong>Image → 3D</strong> — a photo becomes a textured 3D model.</figcaption>
+      </figure>
+      <figure class="gallery__item reveal">
+        <img class="gallery__img" src="assets/gallery/face-swap.png" alt="The Face swap window — put your face onto a target image, 100 percent offline." loading="lazy" decoding="async">
+        <figcaption class="gallery__cap"><strong>Face swap</strong> — your face onto any target, fully offline.</figcaption>
+      </figure>
+      <figure class="gallery__item reveal">
+        <img class="gallery__img" src="assets/gallery/lip-sync.png" alt="The Lip sync window — bring a photo to life with a driving video: expressions, lips and head motion." loading="lazy" decoding="async">
+        <figcaption class="gallery__cap"><strong>Lip sync</strong> — a photo brought to life by a driving video.</figcaption>
+      </figure>
+      <figure class="gallery__item reveal">
+        <img class="gallery__img" src="assets/gallery/setup.png" alt="The Setup and install window — a hardware check with per-GPU speed estimates and one-click model downloads." loading="lazy" decoding="async">
+        <figcaption class="gallery__cap"><strong>Setup &amp; install</strong> — hardware check, speed estimates, one-click install.</figcaption>
+      </figure>
+    </div>
+
+    <p class="shots__note reveal" style="text-align:center">Still rough around the edges and in active development — more coming.</p>
+  </section>
+
+  <!-- CINEMATIC BAND -->
+  <section class="band" aria-label="Vulture AI">
+    <img class="band__img" src="assets/showcase.jpg" alt="A vulture perched on a bare branch against a deep purple twilight sky with a faint aurora." loading="lazy" decoding="async">
+    <div class="band__overlay">
+      <p class="band__line reveal">Local. Private. <span class="accent">Yours.</span></p>
+    </div>
+  </section>
+
+  <!-- HARDWARE / THE VULTURE ANGLE -->
+  <section class="sec" id="hardware" aria-labelledby="hw-title">
+    <div class="split">
+      <div>
+        <p class="sec__label reveal">The vulture angle</p>
+        <h2 class="split__big reveal" id="hw-title">Runs on hardware<br>others <span class="accent">threw away.</span></h2>
+      </div>
+      <div class="split__text reveal">
+        <p>Most of this runs on a <strong>GTX 1060 6GB</strong> — an ancient card. It's slow on old hardware, but it <strong>works</strong>. More VRAM just makes it fly.</p>
+        <br>
+        <p>Like a vulture, it makes the most out of what everyone else discarded. A whole studio's worth of AI, on the machine already sitting under your desk.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="sec" id="how" aria-labelledby="how-title">
+    <p class="sec__label reveal">How it works</p>
+    <h2 class="sr-only" id="how-title">How Vulture AI works</h2>
+    <div class="split">
+      <div class="split__text reveal">
+        <p>Vulture AI is the <strong>launcher and UI</strong>. The heavy AI models aren't bundled — they're <strong>downloaded onto your machine</strong> from their original sources during setup. That keeps it small, legal, and yours.</p>
+        <br>
+        <p>Built on the shoulders of ComfyUI, Ollama, Aider, FLUX, Stable Diffusion and many more open-source projects.</p>
+      </div>
+      <dl class="specs reveal">
+        <div class="spec"><dt class="spec__k">Privacy</dt><dd class="spec__v"><span class="accent">100% offline</span> · nothing leaves</dd></div>
+        <div class="spec"><dt class="spec__k">Cost</dt><dd class="spec__v">Free · open source</dd></div>
+        <div class="spec"><dt class="spec__k">GPU</dt><dd class="spec__v">6GB min · 12GB recommended</dd></div>
+        <div class="spec"><dt class="spec__k">Platform</dt><dd class="spec__v">Windows · NVIDIA</dd></div>
+        <div class="spec"><dt class="spec__k">License</dt><dd class="spec__v">MIT</dd></div>
+        <div class="spec"><dt class="spec__k">Interface</dt><dd class="spec__v">One clean app · no terminal</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- QUICKSTART / INSTALL -->
+  <section class="sec" id="quickstart" aria-labelledby="qs-title">
+    <p class="sec__label reveal">Quickstart · Install</p>
+    <h2 class="sec__title reveal" id="qs-title">Up and running in<br><span class="accent">minutes.</span></h2>
+
+    <p class="sec__label reveal" style="margin-bottom:clamp(20px,2.5vw,32px)">The easy way — no terminal</p>
+
+    <ol class="steps">
+      <li class="step reveal">
+        <span class="step__num" aria-hidden="true">01</span>
+        <div class="step__body">
+          <h3 class="step__title">Install the prerequisites</h3>
+          <p class="step__desc">One-time, a few minutes — grab these first: <a class="link" href="https://www.python.org/downloads/" target="_blank" rel="noopener noreferrer">Python&nbsp;3.11&#8599;</a> (tick <strong>"Add python.exe to PATH"</strong>), <a class="link" href="https://git-scm.com/download/win" target="_blank" rel="noopener noreferrer">Git&#8599;</a>, the <a class="link" href="https://ollama.com/download" target="_blank" rel="noopener noreferrer">Ollama app&#8599;</a> (runs the local chat &amp; coding models), and a current <a class="link" href="https://www.nvidia.com/Download/index.aspx" target="_blank" rel="noopener noreferrer">NVIDIA driver&#8599;</a>.</p>
+        </div>
+      </li>
+
+      <li class="step reveal">
+        <span class="step__num" aria-hidden="true">02</span>
+        <div class="step__body">
+          <h3 class="step__title">Download Vulture AI</h3>
+          <p class="step__desc">Get the ZIP from <a class="link" href="https://github.com/ronnyplayplace-bot/vulture-ai" target="_blank" rel="noopener noreferrer">GitHub&#8599;</a> and unzip it anywhere. It's tiny — just the launcher, no models yet.</p>
+        </div>
+      </li>
+
+      <li class="step reveal">
+        <span class="step__num" aria-hidden="true">03</span>
+        <div class="step__body">
+          <h3 class="step__title">Double-click <span class="accent">INSTALL.cmd</span></h3>
+          <p class="step__desc">That's it. It downloads ComfyUI, the models and everything else, then opens the app. Inside, <strong>⚙&nbsp;Setup</strong> shows your hardware, estimated speeds and one-click model downloads — and lets you pick which drive it all lives on.</p>
+        </div>
+      </li>
+    </ol>
+
+    <p class="qs__note reveal" role="note">
+      <span class="qs__badge">You'll need</span>
+      Windows + an NVIDIA GPU (6&nbsp;GB VRAM or more) and about <strong>100&nbsp;GB</strong> of free disk for the models. A few extras (face-swap, the 4x-UltraSharp upscaler) carry <strong>non-commercial licenses</strong> — Vulture never downloads those; it just points you to them so you grab them yourself.
+    </p>
+
+    <p class="sec__label reveal" style="margin-bottom:clamp(20px,2.5vw,32px)">Prefer the command line?</p>
+
+    <ol class="steps">
+      <li class="step reveal">
+        <span class="step__num" aria-hidden="true">01</span>
+        <div class="step__body">
+          <h3 class="step__title">Clone the repository</h3>
+          <p class="step__desc">Grab the launcher — it's tiny. No models yet, just the app.</p>
+          <div class="code" role="group" aria-label="Terminal command">
+            <button class="code__copy" type="button" aria-label="Copy command">Copy</button>
+            <pre><code><span class="code__prompt">$</span> git clone https://github.com/ronnyplayplace-bot/vulture-ai.git
+<span class="code__prompt">$</span> cd vulture-ai</code></pre>
+          </div>
+        </div>
+      </li>
+
+      <li class="step reveal">
+        <span class="step__num" aria-hidden="true">02</span>
+        <div class="step__body">
+          <h3 class="step__title">Run the installer</h3>
+          <p class="step__desc">One script does the rest: it downloads ComfyUI and the custom nodes, pulls every image / 3D model and the Ollama models, then writes your config. This is the long one (~100&nbsp;GB) — grab a coffee.</p>
+          <div class="code" role="group" aria-label="Terminal command">
+            <button class="code__copy" type="button" aria-label="Copy command">Copy</button>
+            <pre><code><span class="code__prompt">$</span> python setup/install.py</code></pre>
+          </div>
+        </div>
+      </li>
+
+      <li class="step reveal">
+        <span class="step__num" aria-hidden="true">03</span>
+        <div class="step__body">
+          <h3 class="step__title">Launch &amp; create — fully offline</h3>
+          <p class="step__desc">Start Vulture AI: one clean window for generating, upscaling, face-swaps, chat and code. Pull the network cable if you like — nothing ever leaves your machine. (Or just double-click <strong>Overlkd-Studio.cmd</strong>.)</p>
+          <div class="code" role="group" aria-label="Terminal command">
+            <button class="code__copy" type="button" aria-label="Copy command">Copy</button>
+            <pre><code><span class="code__prompt">$</span> python studio.py</code></pre>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <p class="qs__foot reveal">Full requirements and troubleshooting live in the <a class="link" href="https://github.com/ronnyplayplace-bot/vulture-ai#readme" target="_blank" rel="noopener noreferrer">README on GitHub&#8599;</a>.</p>
+  </section>
+
+  <!-- FAQ -->
+  <section class="sec" id="faq" aria-labelledby="faq-title">
+    <p class="sec__label reveal">FAQ</p>
+    <h2 class="sec__title reveal" id="faq-title">Good<br><span class="accent">questions.</span></h2>
+    <div class="faq">
+      <details class="qa reveal">
+        <summary class="qa__q">Is it really free?</summary>
+        <div class="qa__a"><p>Yes — free and open source under the <strong>MIT license</strong>. No subscriptions, no API keys, no paywalls. Donations are welcome but never required.</p></div>
+      </details>
+      <details class="qa reveal">
+        <summary class="qa__q">Does my data leave my machine?</summary>
+        <div class="qa__a"><p>Never. Every model runs locally on your own GPU. After the one-time setup download, Vulture AI works <strong>fully offline</strong> — no cloud, no telemetry, no trackers. Your prompts, images and files stay with you.</p></div>
+      </details>
+      <details class="qa reveal">
+        <summary class="qa__q">What hardware do I need?</summary>
+        <div class="qa__a"><p>A Windows PC with an <strong>NVIDIA GPU</strong>. 6&nbsp;GB of VRAM is the minimum (a GTX 1060 works), 12&nbsp;GB or more is recommended for speed. Keep about <strong>100&nbsp;GB</strong> of free disk space for the models.</p></div>
+      </details>
+      <details class="qa reveal">
+        <summary class="qa__q">Which models does it use?</summary>
+        <div class="qa__a"><p>Open models like <strong>FLUX</strong> and <strong>Stable Diffusion</strong> for images, <strong>TripoSR / Hunyuan3D</strong> for 3D, and <strong>Ollama</strong> models such as Qwen and DeepSeek-R1 for chat and coding. They're downloaded from their original sources during setup — not bundled with the app.</p></div>
+      </details>
+      <details class="qa reveal">
+        <summary class="qa__q">Can I use it commercially?</summary>
+        <div class="qa__a"><p>The Vulture launcher/UI is <strong>MIT — yes, including commercially</strong>. It only runs third-party models, and a few are <strong>non-commercial</strong> by their authors' rules. <strong>Fine to sell:</strong> images from the default <strong>FLUX.1-schnell</strong>, SD1.5, 3D via TripoSR, and the local LLMs (Qwen, DeepSeek). <strong>Personal / research only:</strong> face-swap (InsightFace), CodeFormer, the 4x-UltraSharp upscaler, FLUX.1-dev, LivePortrait, and Hunyuan3D (scale/region limited). Vulture only downloads the non-commercial ones after you explicitly accept. Full details in the <a class="link" href="https://github.com/ronnyplayplace-bot/vulture-ai/blob/main/NOTICE" target="_blank" rel="noopener noreferrer">NOTICE&#8599;</a>.</p></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta" aria-labelledby="cta-title">
+    <h2 class="cta__title reveal" id="cta-title">Own your <span class="accent">AI.</span></h2>
+    <p class="cta__sub reveal">Open source, dropping soon. Star it on GitHub to follow along.</p>
+    <div class="cta__actions reveal">
+      <a class="btn btn--primary" href="https://github.com/ronnyplayplace-bot/vulture-ai" target="_blank" rel="noopener noreferrer">View on GitHub &#8599;</a>
+      <a class="btn btn--ghost" href="https://www.overlkd.com">Overlkd Studio</a>
+    </div>
+  </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="foot">
+    <div class="foot__inner">
+      <div class="foot__left">
+        <p class="foot__brand">Vulture AI</p>
+        <p class="foot__tagline">by Overlkd Studio</p>
+      </div>
+      <div class="foot__links">
+        <a class="foot__link" href="https://www.overlkd.com">Overlkd Studio</a>
+        <a class="foot__link" href="https://github.com/ronnyplayplace-bot/vulture-ai" target="_blank" rel="noopener noreferrer">GitHub · Support</a>
+        <span class="foot__link foot__link--muted">© 2026 · MIT</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/lenis@1.1.20/dist/lenis.min.js"></script>
+  <script>
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches && window.Lenis) {
+      const lenis = new Lenis({ lerp: 0.09, wheelMultiplier: 1 });
+      requestAnimationFrame(function raf(t){ lenis.raf(t); requestAnimationFrame(raf); });
+    }
+  </script>
+  <script src="script.js"></script>
+</body>
+</html>
