@@ -58,8 +58,26 @@ for the install waves.
 
 - ✅ Working: image gen + optimizer, 4K upscale, img2img, image→3D, face-swap,
   lip-sync, local chat, coding agent + auto-splitter, Code-RAG
-- 🔜 Next (RTX): local video (LTX-2 / Wan 2.2), text-to-music, voice cloning (TTS),
-  local LoRA training, cross-machine installer
+- 🔜 Next: local **video** (LTX-2 / Wan 2.2), **text-to-music**, **voice cloning** (TTS),
+  local **LoRA training**, cross-machine installer
+
+> ⚙️ **Heads up:** the next wave (video, voice, LoRA training) needs more VRAM than a
+> GTX 1060 — realistically a 12GB+ GPU. Development is currently bottlenecked by hardware.
+
+## 🖤 Support / fuel the roadmap
+
+Vulture AI is free and always will be. But the directions above (local video, voice
+cloning, LoRA training) need beefier hardware than what it's being built on right now.
+If the project is useful to you and you'd like to help it grow, anything is appreciated —
+it goes **straight into hardware** to unlock the next features:
+
+- ☕ **Buy Me a Coffee:** `<your-buymeacoffee-url>`
+- 💜 **GitHub Sponsors:** enable on the repo, then it shows here
+- ₿ **Crypto:**
+  - BTC: `<your-btc-address>`
+  - ETH: `<your-eth-address>`
+
+No pressure at all — a ⭐ on GitHub already helps a ton. 🙏
 
 ## License
 
