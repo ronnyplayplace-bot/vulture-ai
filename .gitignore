@@ -34,6 +34,10 @@ personal*
 !docs/*.png
 !docs/*.jpg
 !docs/*.webp
+!docs/gallery/
+!docs/gallery/*.png
+!docs/gallery/*.jpg
+!docs/gallery/*.webp
 
 # --- Internal planning notes (keep private) ---
 *STAND*.md
