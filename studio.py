@@ -76,11 +76,14 @@ def stop_all():
     run_hidden(f'powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort {cfg.comfy_port},{cfg.webui_port},{cfg.rag_port} -State Listen -EA SilentlyContinue | %% {{ Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }}"')
 
 def start_webui_and_open():
-    # Open WebUI launcher lives in the repo's rag/ (written by setup/install.py
-    # step_webui). Not the old cross-project cfg.tools_dir path.
-    launcher=os.path.join(os.path.dirname(os.path.abspath(__file__)),"rag","start-webui.cmd")
-    if not port_open(cfg.webui_port) and os.path.exists(launcher):
-        run_hidden(f'"{launcher}"')
+    # Open WebUI launcher lives in the repo's rag/ (written by setup/install.py).
+    # Prefer the .vbs (window style 0 -> no console at all, no request-log flood);
+    # fall back to the .cmd. Not the old cross-project cfg.tools_dir path.
+    d=os.path.dirname(os.path.abspath(__file__))
+    vbs=os.path.join(d,"rag","start-webui.vbs"); cmd=os.path.join(d,"rag","start-webui.cmd")
+    if not port_open(cfg.webui_port):
+        if os.path.exists(vbs): run_hidden(f'wscript "{vbs}"')
+        elif os.path.exists(cmd): run_hidden(f'"{cmd}"')
     webbrowser.open(cfg.webui_url)
 def _open_cmd(path):
     # reliably open a console window (os.startfile launches the .cmd in its own window)
@@ -565,10 +568,19 @@ setup_lbl=tk.Label(foot,text="⚙ Setup",font=small_f,bg=BG,fg=ACCENT_LT,cursor=
 setup_lbl.bind("<Button-1>",lambda e:open_setup_window())
 req_lbl=tk.Label(foot,text="📋 Licenses",font=small_f,bg=BG,fg=ACCENT_LT,cursor="hand2"); req_lbl.pack(side="right",padx=(0,16))
 req_lbl.bind("<Button-1>",lambda e:open_requirements_window())
+_slogan_after=[None]
 def _rotate_slogan(i=0):
-    slogan_lbl.config(text=SLOGANS[i % len(SLOGANS)])
-    root.after(6000, lambda:_rotate_slogan(i+1))
-root.after(6000,_rotate_slogan)
+    slogan_lbl.config(text=SLOGANS[i % len(SLOGANS)], fg=SUB)
+    _slogan_after[0]=root.after(6000, lambda:_rotate_slogan(i+1))
+def flash(msg, ms=5000):
+    # Transient click feedback in the footer so a click is never "did nothing".
+    # Pauses the slogan rotation, shows msg, then resumes.
+    if _slogan_after[0]:
+        try: root.after_cancel(_slogan_after[0])
+        except Exception: pass
+    slogan_lbl.config(text=msg, fg=ACCENT_LT)
+    _slogan_after[0]=root.after(ms, lambda:_rotate_slogan(0))
+_slogan_after[0]=root.after(6000,_rotate_slogan)
 
 # ---- Body: actions on the left (grid), status on the right ----
 body=tk.Frame(root,bg=BG); body.pack(fill="both",expand=True,padx=20,pady=(4,16))
@@ -598,10 +610,10 @@ for i in range(2): left.columnconfigure(i,weight=1)
 for i in range(6): left.rowconfigure(i,weight=1)
 
 # Start spans the full width
-make_card(left,0,0,"▶","START ALL","Boot up services",start_all,base=ACCENT,fg="#ffffff").grid(columnspan=2,sticky="nsew")
+make_card(left,0,0,"▶","START ALL","Boot up services",lambda:(flash("⏳ Starting services — ComfyUI · RAG · Chat (~15 s, then a browser tab opens)…"),start_all()),base=ACCENT,fg="#ffffff").grid(columnspan=2,sticky="nsew")
 make_card(left,1,0,"\U0001f3a8","Create images","Text in, image out",lambda:open_generator())
-make_card(left,1,1,"\U0001f4ac","Chat","Local AI models",start_webui_and_open)
-make_card(left,2,0,"\U0001f4bb","Coding agent","Aider (terminal)",open_coder)
+make_card(left,1,1,"\U0001f4ac","Chat","Local AI models",lambda:(flash("⏳ Starting chat (Open WebUI)… first run builds up ~60-90 s, then the tab opens."),start_webui_and_open()))
+make_card(left,2,0,"\U0001f4bb","Coding agent","Aider (terminal)",lambda:(flash("⏳ Opening the coding agent… first run loads the model into VRAM - give it a moment."),open_coder()))
 make_card(left,2,1,"\U0001f4ca","Status","RAM / VRAM / GPU",open_status)
 make_card(left,3,0,"\U0001f3ad","Face swap","Face swap (photo)",lambda:open_faceswap_window())
 make_card(left,3,1,"\U0001f444","Lip sync","Bring a photo to life",lambda:open_lipsync_window())
@@ -619,13 +631,13 @@ for name in SERVICES:
 tk.Frame(right,bg=BG,height=12).pack()
 free_f=tk.Frame(right,bg="#16241c",cursor="hand2"); free_f.pack(fill="x",pady=4)
 tk.Label(free_f,text="\U0001f9f9  Free memory",font=sub_f,bg="#16241c",fg=GREEN).pack(pady=10)
-for w in [free_f]+list(free_f.winfo_children()): w.bind("<Button-1>",lambda e:free_memory())
+for w in [free_f]+list(free_f.winfo_children()): w.bind("<Button-1>",lambda e:(flash("\U0001f9f9 Freeing GPU memory…"),free_memory()))
 stop_f=tk.Frame(right,bg="#2a1518",cursor="hand2"); stop_f.pack(fill="x",pady=4)
 tk.Label(stop_f,text="⏹  Stop all",font=sub_f,bg="#2a1518",fg=RED).pack(pady=10)
-for w in [stop_f]+list(stop_f.winfo_children()): w.bind("<Button-1>",lambda e:stop_all())
+for w in [stop_f]+list(stop_f.winfo_children()): w.bind("<Button-1>",lambda e:(flash("⏳ Stopping all services…"),stop_all()))
 upd_f=tk.Frame(right,bg="#161a24",cursor="hand2"); upd_f.pack(fill="x",pady=4)
 tk.Label(upd_f,text="⟳  Update (GitHub)",font=small_f,bg="#161a24",fg=ACCENT_LT).pack(pady=8)
-for w in [upd_f]+list(upd_f.winfo_children()): w.bind("<Button-1>",lambda e:studio_update())
+for w in [upd_f]+list(upd_f.winfo_children()): w.bind("<Button-1>",lambda e:(flash("⟳ Updating from GitHub… (git pull)"),studio_update()))
 
 def refresh():
     for name,port in SERVICES.items():

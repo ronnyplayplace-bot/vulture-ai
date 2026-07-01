@@ -755,10 +755,15 @@ def step_aider(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
 # STEP 5b - Open WebUI (local chat frontend for Ollama, ~7 GB, Python 3.11)
 # --------------------------------------------------------------------------- #
 def _write_start_webui_cmd(live: Config, venv_dir: str, webui_data: str) -> None:
-    """(Re)write rag/start-webui.cmd from resolved config -- single local user."""
+    """(Re)write rag/start-webui.cmd + start-webui.vbs from resolved config.
+
+    Runs uvicorn directly (not `open-webui serve`) so we can pass --no-access-log
+    -- that is the only way to silence the per-request console flood. pythonw +
+    a VBS shim = no console window at all. Single local user (no login)."""
     port = live.webui_port
     ollama = live.ollama_api or "http://127.0.0.1:11434"
-    activate = os.path.join(venv_dir, "Scripts", "activate.bat")
+    exe = os.path.join(venv_dir, "Scripts", "open-webui.exe")
+    default_model = (live.coder_model or "qwen2.5-coder:7b")
     out = REPO_ROOT / "rag" / "start-webui.cmd"
     lines = [
         "@echo off",
@@ -769,15 +774,106 @@ def _write_start_webui_cmd(live: Config, venv_dir: str, webui_data: str) -> None
         'set "WEBUI_AUTH=False"',
         'set "ENABLE_SIGNUP=False"',
         'set "DEFAULT_USER_ROLE=admin"',
+        f'set "DEFAULT_MODELS={default_model}"',
+        'set "GLOBAL_LOG_LEVEL=WARNING"',
         'set "DO_NOT_TRACK=true"',
         'set "SCARF_NO_ANALYTICS=true"',
-        f'call "{activate}"',
-        f"echo Starting Open WebUI on http://localhost:{port}  "
-        "(first run: DB migration ~60-90s)",
-        f"open-webui serve --port {port}",
+        # open-webui serve sets its own secret keys + runs migrations. The studio
+        # launches this via start-webui.vbs (window style 0 -> no visible console,
+        # so the request-log chatter is never seen). Run the .cmd directly to debug.
+        f'"{exe}" serve --port {port}',
     ]
     out.write_text("\r\n".join(lines) + "\r\n", encoding="ascii", errors="replace")
     ok(f"wrote {out}")
+    # Hidden launcher: runs the .cmd with window style 0 (nothing visible at all).
+    vbs = REPO_ROOT / "rag" / "start-webui.vbs"
+    vbs_body = ('Set sh = CreateObject("WScript.Shell")\r\n'
+                f'sh.Run "cmd /c ""{out}""", 0, False\r\n')
+    vbs.write_text(vbs_body, encoding="ascii", errors="replace")
+
+
+def _seed_webui_function(live: Config, venv_py: str, webui_data: str) -> None:
+    """Warm-boot Open WebUI once to make it turnkey: persist the Ollama connection +
+    default model, and import + globally enable the Chat-RAG memory filter. All
+    best-effort -- on any failure the UI still works, just not pre-seeded."""
+    import json as _json, time as _time
+    import urllib.request as _u, urllib.error as _ue
+    filt = REPO_ROOT / "rag" / "openwebui" / "ai_memory_filter.py"
+    if not filt.exists():
+        return
+    base = f"http://127.0.0.1:{live.webui_port}"
+
+    def _api(method, path, token=None, body=None):
+        data = _json.dumps(body).encode() if body is not None else None
+        req = _u.Request(base + path, data=data, method=method)
+        req.add_header("Content-Type", "application/json")
+        if token:
+            req.add_header("Authorization", "Bearer " + token)
+        with _u.urlopen(req, timeout=30) as r:
+            return _json.loads(r.read().decode() or "{}")
+
+    env = os.environ.copy()
+    env.update({
+        "DATA_DIR": webui_data,
+        "OLLAMA_BASE_URL": live.ollama_api or "http://127.0.0.1:11434",
+        # ENABLE_SIGNUP=True only for this transient warm-boot, so the very first
+        # admin@localhost account can be provisioned on a fresh DB (the runtime
+        # launcher keeps signup off). DEFAULT_USER_ROLE=admin -> first user is admin.
+        "WEBUI_AUTH": "False", "ENABLE_SIGNUP": "True", "DEFAULT_USER_ROLE": "admin",
+        "DEFAULT_MODELS": live.coder_model or "qwen2.5-coder:7b",
+        "GLOBAL_LOG_LEVEL": "WARNING", "DO_NOT_TRACK": "true", "SCARF_NO_ANALYTICS": "true",
+    })
+    info("pre-configuring Open WebUI (default model + chat-memory filter)...")
+    webui_exe = os.path.join(os.path.dirname(venv_py), "open-webui.exe")
+    boot_cmd = ([webui_exe, "serve", "--port", str(live.webui_port)]
+                if os.path.exists(webui_exe)
+                else [venv_py, "-m", "open_webui", "serve", "--port", str(live.webui_port)])
+    proc = subprocess.Popen(
+        boot_cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    try:
+        end = _time.time() + 300
+        up = False
+        while _time.time() < end:
+            try:
+                _u.urlopen(base + "/health", timeout=5)
+                up = True
+                break
+            except Exception:
+                _time.sleep(3)
+        if not up:
+            warn("Open WebUI did not come up in time -- skipped pre-config (UI still works).")
+            return
+        token = _api("POST", "/api/v1/auths/signin",
+                     body={"email": "admin@localhost", "password": "admin"}).get("token")
+        if not token:
+            warn("could not obtain an Open WebUI admin token -- skipped filter import.")
+            return
+        try:  # idempotent: already imported?
+            _api("GET", "/api/v1/functions/id/ai_memory", token=token)
+            ok("Open WebUI chat-memory filter already present.")
+            return
+        except _ue.HTTPError as e:
+            if e.code != 404:
+                raise
+        content = filt.read_text(encoding="utf-8")
+        _api("POST", "/api/v1/functions/create", token=token, body={
+            "id": "ai_memory", "name": "Chat Memory (local RAG)", "content": content,
+            "meta": {"description": "Local RAG long-term chat memory", "manifest": {}}})
+        _api("POST", "/api/v1/functions/id/ai_memory/toggle", token=token)
+        _api("POST", "/api/v1/functions/id/ai_memory/toggle/global", token=token)
+        ok("Open WebUI pre-configured: default model + chat-memory filter enabled.")
+    except Exception as exc:
+        warn(f"Open WebUI pre-config skipped ({exc}); the UI still works.")
+    finally:
+        try:
+            proc.terminate()
+            proc.wait(timeout=15)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
 
 
 def step_webui(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
@@ -820,8 +916,9 @@ def step_webui(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
     except OSError:
         pass
     _write_start_webui_cmd(live, venv_dir, webui_data)
-    ok(f"Open WebUI ready. Chat card / rag\\start-webui.cmd (port {live.webui_port}). "
-       "First run builds the DB (~60-90 s before the page loads).")
+    _seed_webui_function(live, venv_py, webui_data)
+    ok(f"Open WebUI ready (turnkey: no login, Ollama connected, memory filter on). "
+       f"Chat card / rag\\start-webui.vbs (port {live.webui_port}).")
 
 
 # --------------------------------------------------------------------------- #

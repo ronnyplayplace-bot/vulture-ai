@@ -90,3 +90,4 @@ desktop.ini
 
 # --- generated per-machine (baked paths) ---
 rag/start-webui.cmd
+rag/start-webui.vbs
