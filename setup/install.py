@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Vulture AI (OVRLKD Studio) -- one-shot, idempotent bootstrap installer.
+"""Vulture AI (Overlkd Studio) -- one-shot, idempotent bootstrap installer.
 
 Goal / acceptance test:
     delete everything -> `git clone` -> `python setup/install.py` -> it runs.
@@ -46,10 +46,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from vulture.config import Config, load_config, _available_drives, _norm  # noqa: E402
+from vulture.config import (  # noqa: E402
+    Config, load_config, _available_drives, _norm, _rag_base_dir,
+)
 
 MANIFEST_PATH = Path(__file__).resolve().parent / "models.manifest.json"
-STEP_ORDER = ["comfyui", "nodes", "models", "ollama", "config"]
+STEP_ORDER = ["comfyui", "nodes", "models", "ollama", "rag", "config"]
 
 
 # --------------------------------------------------------------------------- #
@@ -223,7 +225,7 @@ def choose_install_root() -> str:
 # --------------------------------------------------------------------------- #
 def step_comfyui(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
                  args: argparse.Namespace) -> None:
-    banner("STEP 1/5  ComfyUI + virtual environment")
+    banner("STEP 1/6  ComfyUI + virtual environment")
     spec = manifest.get("comfyui", {})
 
     comfy_dir = state.get("comfy_dir") or cfg.comfy_dir
@@ -292,7 +294,7 @@ def step_comfyui(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
 # --------------------------------------------------------------------------- #
 def step_nodes(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
                args: argparse.Namespace) -> None:
-    banner("STEP 2/5  ComfyUI custom nodes")
+    banner("STEP 2/6  ComfyUI custom nodes")
     comfy_dir = state.get("comfy_dir") or cfg.comfy_dir
     venv_py = state.get("comfy_python") or cfg.comfy_python
     if not comfy_dir:
@@ -408,7 +410,7 @@ def _extract_zip(zip_path: str, dest_dir: str) -> None:
 
 def step_models(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
                 args: argparse.Namespace) -> Dict[str, int]:
-    banner("STEP 3/5  model files")
+    banner("STEP 3/6  model files")
     # Rebuild a config view that knows the freshly-installed comfy dir.
     live = _live_config(cfg, state)
     hf_cache = live.hf_cache_dir or None
@@ -478,7 +480,7 @@ def step_models(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
 # --------------------------------------------------------------------------- #
 def step_ollama(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
                 args: argparse.Namespace) -> Dict[str, int]:
-    banner("STEP 4/5  Ollama models")
+    banner("STEP 4/6  Ollama models")
     live = _live_config(cfg, state)
     stats = {"pulled": 0, "skipped": 0, "failed": 0}
 
@@ -527,11 +529,64 @@ def step_ollama(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
 
 
 # --------------------------------------------------------------------------- #
-# STEP 5 - write config.json
+# STEP 5 - local code-RAG (Qdrant + fastembed)
+# --------------------------------------------------------------------------- #
+def step_rag(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
+             args: argparse.Namespace) -> None:
+    banner("STEP 5/6  local code-RAG (Qdrant + embeddings)")
+    live = _live_config(cfg, state)
+    req = REPO_ROOT / "rag" / "requirements.txt"
+    if not req.exists():
+        warn(f"rag/requirements.txt not found ({req}) -- skipping RAG setup.")
+        return
+
+    # A dedicated venv keeps the RAG's fastapi/qdrant/fastembed deps isolated
+    # from ComfyUI's. Location is drive-agnostic (under %LOCALAPPDATA%).
+    base = _rag_base_dir()
+    venv_dir = os.path.join(base, "venv")
+    venv_py = os.path.join(venv_dir, "Scripts", "python.exe")
+    if not os.path.exists(venv_py):
+        posix_py = os.path.join(venv_dir, "bin", "python")
+        if os.path.exists(posix_py):
+            venv_py = posix_py
+    base_py = live.system_python or sys.executable
+
+    if args.readonly:
+        info(f"(read-only) would create RAG venv at {venv_dir}")
+        info(f"(read-only) would install: {os.path.basename(str(req))} (fastapi, uvicorn, qdrant-client, fastembed)")
+        info(f"(read-only) RAG data would live under {base}")
+        return
+
+    if os.path.exists(venv_py):
+        skip(f"RAG venv present: {venv_dir}")
+    else:
+        os.makedirs(base, exist_ok=True)
+        info(f"creating RAG venv with {base_py}")
+        run([base_py, "-m", "venv", venv_dir], check=False)
+        if os.name != "nt":
+            venv_py = os.path.join(venv_dir, "bin", "python")
+    if not os.path.exists(venv_py):
+        warn("RAG venv python not found -- installing deps into the base Python instead.")
+        venv_py = base_py
+
+    run([venv_py, "-m", "pip", "install", "--upgrade", "pip"], check=False)
+    run([venv_py, "-m", "pip", "install", "-r", str(req)], check=False)
+
+    # Pre-create the local data folders so the first server start is clean.
+    for d in (live.qdrant_path, live.rag_data_dir, live.rag_cache_dir):
+        try:
+            os.makedirs(d, exist_ok=True)
+        except OSError:
+            pass
+    ok(f"code-RAG ready. Start it with  rag\\start-rag.cmd  (port {live.rag_port}).")
+
+
+# --------------------------------------------------------------------------- #
+# STEP 6 - write config.json
 # --------------------------------------------------------------------------- #
 def step_config(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
                 args: argparse.Namespace) -> None:
-    banner("STEP 5/5  write config.json")
+    banner("STEP 6/6  write config.json")
     live = _live_config(cfg, state)
     out_path = REPO_ROOT / "config.json"
 
@@ -642,6 +697,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             summary["models"] = step_models(cfg, state, manifest, args)
         elif step == "ollama":
             summary["ollama"] = step_ollama(cfg, state, manifest, args)
+        elif step == "rag":
+            step_rag(cfg, state, manifest, args)
         elif step == "config":
             step_config(cfg, state, manifest, args)
         else:

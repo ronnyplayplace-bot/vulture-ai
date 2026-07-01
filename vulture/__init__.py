@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Vulture AI (OVRLKD Studio) support package.
+"""Vulture AI (Overlkd Studio) support package.
 
 Currently exposes the portable configuration layer so that ``studio.py`` and
 the setup scripts can share one source of truth for paths, ports and settings

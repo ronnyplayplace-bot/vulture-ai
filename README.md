@@ -4,7 +4,7 @@
 
 # 🦅 Vulture AI
 
-### by OVRLKD Studio
+### by Overlkd Studio
 
 **A fully offline, private AI creative studio in one clean desktop app.**
 No cloud, no API keys, no subscriptions — nothing leaves your machine.
@@ -17,12 +17,12 @@ No cloud, no API keys, no subscriptions — nothing leaves your machine.
 
 ---
 
-![OVRLKD Studio — one clean window, every tool in one place, no node spaghetti](docs/screenshot.png)
+![Overlkd Studio — one clean window, every tool in one place, no node spaghetti](docs/screenshot.png)
 
 ## What it is
 
 Every individual AI tool out there is brilliant — but you spend more time gluing
-them together than actually using them. OVRLKD Studio wraps them into **one
+them together than actually using them. Overlkd Studio wraps them into **one
 window** so non-technical people can use them too. No ComfyUI node spaghetti,
 no terminal.
 
@@ -38,7 +38,12 @@ no terminal.
 - 💻 **Local coding agent** — Aider + local models, with an auto test→repair loop
   and an **auto-splitter** that breaks a big prompt into small steps so weaker
   local models don't choke
-- 🧠 **Code-RAG** — Qdrant + embeddings for semantic search across your projects
+- 🧠 **Two local RAGs, one embedded store** — **Code-RAG** searches **your own**
+  projects by meaning (pick a folder or clone a public GitHub repo), and
+  **Chat-RAG** keeps chat memory across sessions. Both live in the same embedded
+  local RAG (Qdrant + local embeddings), reachable from the **Code search**
+  window — 100% local, nothing on any server, nothing leaves your machine.
+  (Auto-filling chat memory from the chat UI is an optional integration.)
 - ⚙️ Context size **auto-scales** to your GPU — zero manual tuning
 
 ## Runs on modest hardware
@@ -63,26 +68,16 @@ for the install waves.
 ## Status & roadmap
 
 - ✅ Working: image gen + optimizer, 4K upscale, img2img, image→3D, face-swap,
-  lip-sync, local chat, coding agent + auto-splitter, Code-RAG
+  lip-sync, local chat, coding agent + auto-splitter, Code-RAG + Chat-RAG (both local)
 - 🔜 Next: local **video** (LTX-2 / Wan 2.2), **text-to-music**, **voice cloning** (TTS),
   local **LoRA training**, cross-machine installer
 
 > ⚙️ **Heads up:** the next wave (video, voice, LoRA training) needs more VRAM than a
 > GTX 1060 — realistically a 12GB+ GPU. Development is currently bottlenecked by hardware.
 
-## 🖤 Support / fuel the roadmap
+## Support
 
-Vulture AI is free and always will be. But the directions above (local video, voice
-cloning, LoRA training) need beefier hardware than what it's being built on right now.
-If the project is useful to you and you'd like to help it grow, anything is appreciated —
-it goes **straight into hardware** to unlock the next features:
-
-- ₿ **Crypto:**
-  - **BTC** (Bitcoin network): `37W7Djk14P9kw3Gx3zWLNXpTyRcSJfrwSe`
-  - **ETH** (Ethereum network): `0x30d7d100fe6606a0860786dacb975c7f7723852c`
-  - **USDT** (BNB Smart Chain · BEP20): `0x30d7d100fe6606a0860786dacb975c7f7723852c`
-
-No pressure at all — a ⭐ on GitHub already helps a ton. 🙏
+Vulture AI is free and always will be. A ⭐ on GitHub helps a ton. 🙏
 
 ## License
 

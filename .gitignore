@@ -1,4 +1,4 @@
-# ===== OVRLKD Studio .gitignore =====
+# ===== Overlkd Studio .gitignore =====
 # SECURITY FIRST: never commit secrets, keys, personal data, or model weights.
 
 # --- Secrets / credentials (NEVER commit) ---

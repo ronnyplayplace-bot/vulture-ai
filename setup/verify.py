@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Vulture AI (OVRLKD Studio) -- post-install self-test.
+"""Vulture AI (Overlkd Studio) -- post-install self-test.
 
 Prints a clear OK / FAIL checklist for the whole environment so you know a
 fresh clone + ``python setup/install.py`` actually produced a *working* setup:

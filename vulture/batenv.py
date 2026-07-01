@@ -2,7 +2,7 @@
 """Emit ``set "VAR=value"`` lines so the ``.cmd`` launchers get portable paths.
 
 Batch files cannot read ``config.json`` nor scan the drives for a ComfyUI /
-Ollama / Python install, so every OVRLKD ``.cmd`` sources this tiny helper at
+Ollama / Python install, so every Overlkd ``.cmd`` sources this tiny helper at
 the top::
 
     set "PYEXE=python"
@@ -54,11 +54,17 @@ def main() -> int:
         ("AIDER_PY",      cfg.aider_python),
         ("SYSTEM_PY",     cfg.system_python),
         ("TOOLS_DIR",     cfg.tools_dir),
+        # -- code-RAG (local semantic code search) --
+        ("RAG_PY",              cfg.rag_python),
+        ("QDRANT_PATH",         cfg.qdrant_path),
+        ("RAG_DATA_DIR",        cfg.rag_data_dir),
+        ("FASTEMBED_CACHE_PATH", cfg.rag_cache_dir),
+        ("EMBED_MODEL",         cfg.embed_model),
+        ("RAG_COLLECTION",      cfg.rag_collection),
         # -- ports --
         ("COMFY_PORT",    cfg.comfy_port),
         ("WEBUI_PORT",    cfg.webui_port),
         ("RAG_PORT",      cfg.rag_port),
-        ("TUNNEL_PORT",   cfg.tunnel_port),
         ("OLLAMA_PORT",   cfg.ollama_port),
     ]
 

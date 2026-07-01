@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""OVRLKD Studio AI - One window for everything, incl. a simple image generator."""
+"""Overlkd Studio AI - One window for everything, incl. a simple image generator."""
 import tkinter as tk
 from tkinter import font as tkfont, ttk, messagebox, filedialog
 import subprocess, socket, os, threading, webbrowser, json, urllib.request, time, random, io
@@ -7,6 +7,7 @@ import subprocess, socket, os, threading, webbrowser, json, urllib.request, time
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # find the vulture pkg
 from vulture.config import get_config
+from vulture.hardware import detect_gpu, detect_ram_gb, speed_multiplier
 cfg = get_config()
 
 # --- was hard-coded, now from config.json / auto-detect ---
@@ -15,7 +16,7 @@ COMFY_API  = cfg.comfy_api             # was "http://127.0.0.1:8188"
 OUTPUT_DIR = cfg.output_dir            # was r"D:\comfyui\output"
 TOOLS      = cfg.tools_dir             # was r"C:\Users\User\ai-memory-tools"
 
-# ---- OVRLKD editorial dark-purple palette ----
+# ---- Overlkd editorial dark-purple palette ----
 BG="#0a0a0a"; CARD="#1a1d27"; PANEL="#14141c"; DIV="#1c1c1c"
 ACCENT="#9b5dff"; ACCENT_LT="#c084fc"; ACCENT_DK="#5a3aef"
 FG="#f0f0f0"; SUB="#888888"; GREEN="#3ddc84"; RED="#ff4d4d"
@@ -74,7 +75,7 @@ def free_memory():
 def start_all(): run_hidden(f'"{cfg.start_all_cmd}" silent')
 def stop_all():
     run_hidden('taskkill /F /IM open-webui.exe /T')
-    run_hidden(f'powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort {cfg.comfy_port},{cfg.webui_port},{cfg.rag_port},{cfg.tunnel_port} -State Listen -EA SilentlyContinue | %% {{ Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }}"')
+    run_hidden(f'powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort {cfg.comfy_port},{cfg.webui_port},{cfg.rag_port} -State Listen -EA SilentlyContinue | %% {{ Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }}"')
 
 def start_webui_and_open():
     if not port_open(cfg.webui_port): run_hidden(f'"{os.path.join(cfg.tools_dir, "start-webui.cmd")}"')
@@ -83,12 +84,59 @@ def _open_cmd(path):
     # reliably open a console window (os.startfile launches the .cmd in its own window)
     try: os.startfile(path)
     except Exception:
-        subprocess.Popen(f'start "OVRLKD" "{path}"', shell=True)
+        subprocess.Popen(f'start "Overlkd" "{path}"', shell=True)
 def open_coder(): _open_cmd(cfg.coder_cmd)
 def open_status(): _open_cmd(cfg.status_cmd)
 def open_3d():
     if os.path.exists(os.path.join(cfg.tripo_src_dir, "run.py")): _open_cmd(os.path.join(cfg.tripo_dir, "Bild-zu-3D.cmd"))
     else: _open_cmd(os.path.join(cfg.tripo_dir, "1-Setup-3D-installieren.cmd"))
+
+# ---------- Code-RAG (local, private semantic code search) ----------
+RAG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rag")
+def start_rag_service(visible=False):
+    """Start the local Code-RAG server (rag/start-rag.cmd) if it isn't already
+    listening. Hidden by default (no console window); pass visible=True to open a
+    console for debugging (e.g. to watch the first-run model download / errors).
+    100% local (127.0.0.1)."""
+    if port_open(cfg.rag_port): return True
+    cmd = os.path.join(RAG_DIR, "start-rag.cmd")
+    if os.path.exists(cmd):
+        if visible: _open_cmd(cmd)
+        else: run_hidden(f'"{cmd}"')
+    return False
+
+def stop_service_port(port):
+    """Stop whatever local service is listening on ``port`` (kill its process)."""
+    run_hidden('powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort '
+               f'{port} -State Listen -EA SilentlyContinue | %% {{ Stop-Process '
+               '-Id $_.OwningProcess -Force -EA SilentlyContinue }}"')
+
+def studio_update():
+    """One-click update: ``git pull`` in the Studio folder. Only works when Vulture
+    AI was installed via ``git clone`` (then this folder is the git repo)."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    def show(kind, msg): root.after(0, lambda: getattr(messagebox, kind)("Update", msg))
+    if not os.path.isdir(os.path.join(here, ".git")):
+        show("showinfo", "This install isn't a git clone, so there's nothing to pull.\n\n"
+             "For one-click updates, install Vulture AI with:\n"
+             "    git clone <repo-url>\nand run studio.py from that folder.")
+        return
+    def worker():
+        try:
+            r = subprocess.run(["git", "pull", "--ff-only"], cwd=here, capture_output=True,
+                               text=True, timeout=120, creationflags=subprocess.CREATE_NO_WINDOW)
+            out = ((r.stdout or "") + (r.stderr or "")).strip()
+            if r.returncode != 0:
+                show("showwarning", "Update failed:\n\n" + out[-600:]); return
+            if "up to date" in out.lower():
+                show("showinfo", "Already on the latest version. ✅")
+            else:
+                show("showinfo", "Updated! ✅\n\n" + out[-500:] + "\n\nRestart the Studio to apply.")
+        except FileNotFoundError:
+            show("showwarning", "git is not installed — install Git to enable updates.")
+        except Exception as e:
+            show("showwarning", f"Update error: {e}")
+    threading.Thread(target=worker, daemon=True).start()
 
 # ---------- Workflows ----------
 def wf_sd15(model, prompt, w, h, seed, hires=2.0):
@@ -381,7 +429,18 @@ def generate(engine, model_file, prompt, w, h, hires, on_status, on_image):
 
 # ---------------- GUI ----------------
 root=tk.Tk(); root.title("Vulture AI"); root.configure(bg=BG)
-root.geometry("900x540+140+80"); root.minsize(820,500); root.resizable(True,True)
+# App icon (Vulture AI logo) for the title bar / Alt-Tab / taskbar.
+_APPDIR=os.path.dirname(os.path.abspath(__file__))
+try:
+    _ico=os.path.join(_APPDIR,"vulture.ico")
+    if os.path.exists(_ico): root.iconbitmap(default=_ico)
+except Exception: pass
+try:
+    _png=os.path.join(_APPDIR,"vulture.png")
+    if os.path.exists(_png):
+        _appicon=tk.PhotoImage(file=_png); root.iconphoto(True,_appicon)
+except Exception: pass
+root.geometry("900x600+140+80"); root.minsize(820,540); root.resizable(True,True)
 
 # --- Dark-purple ttk.Combobox theming: field + readonly state + dropdown popup ---
 _cbstyle=ttk.Style(); _cbstyle.theme_use("default")
@@ -459,7 +518,7 @@ def make_frameless(win, title, closer):
 
 # ---- Subtle support dialog (copy crypto addresses) ----
 def open_support_window():
-    win=tk.Toplevel(root); win.title("OVRLKD - Support"); win.geometry("440x400")
+    win=tk.Toplevel(root); win.title("Overlkd - Support"); win.geometry("440x400")
     win.lift(); win.focus_force()
     make_frameless(win, "♥  Support", win.destroy)
     tk.Label(win,text="Support keeps it free & offline.",font=sub_f,bg=BG,fg=ACCENT_LT).pack(pady=(16,4))
@@ -484,7 +543,7 @@ make_frameless(root, "VULTURE AI", root.destroy)
 # ---- Header ----
 head=tk.Frame(root,bg=BG); head.pack(fill="x",padx=24,pady=(16,6))
 tk.Label(head,text="VULTURE AI",font=title_f,bg=BG,fg=FG).pack(side="left")
-_by=tk.Label(head,text="  by OVRLKD Studio ↗",font=sub_f,bg=BG,fg=ACCENT_LT,cursor="hand2"); _by.pack(side="left",pady=(10,0))
+_by=tk.Label(head,text="  by Overlkd Studio ↗",font=sub_f,bg=BG,fg=ACCENT_LT,cursor="hand2"); _by.pack(side="left",pady=(10,0))
 _by.bind("<Button-1>",lambda e:webbrowser.open("https://www.overlkd.com"))
 tk.Frame(root,bg=DIV,height=1).pack(fill="x",padx=24,pady=(0,2))
 
@@ -493,6 +552,8 @@ foot=tk.Frame(root,bg=BG); foot.pack(side="bottom",fill="x",padx=24,pady=(0,8))
 slogan_lbl=tk.Label(foot,text=SLOGANS[0],font=small_f,bg=BG,fg=SUB); slogan_lbl.pack(side="left")
 sup_lbl=tk.Label(foot,text="♥ Support",font=small_f,bg=BG,fg=ACCENT_LT,cursor="hand2"); sup_lbl.pack(side="right")
 sup_lbl.bind("<Button-1>",lambda e:open_support_window())
+setup_lbl=tk.Label(foot,text="⚙ Setup",font=small_f,bg=BG,fg=ACCENT_LT,cursor="hand2"); setup_lbl.pack(side="right",padx=(0,16))
+setup_lbl.bind("<Button-1>",lambda e:open_setup_window())
 def _rotate_slogan(i=0):
     slogan_lbl.config(text=SLOGANS[i % len(SLOGANS)])
     root.after(6000, lambda:_rotate_slogan(i+1))
@@ -523,7 +584,7 @@ def make_card(parent,r,c,emoji,text,sub,cmd,base=CARD,fg=FG,h=64):
     return f
 
 for i in range(2): left.columnconfigure(i,weight=1)
-for i in range(5): left.rowconfigure(i,weight=1)
+for i in range(6): left.rowconfigure(i,weight=1)
 
 # Start spans the full width
 make_card(left,0,0,"▶","START ALL","Boot up services",start_all,base=ACCENT,fg="#ffffff").grid(columnspan=2,sticky="nsew")
@@ -535,6 +596,7 @@ make_card(left,3,0,"\U0001f3c3","Rig/Animate","Mixamo (browser)",lambda:webbrows
 make_card(left,3,1,"\U0001f4ca","Status","RAM / VRAM / GPU",open_status)
 make_card(left,4,0,"\U0001f3ad","Face swap","Face swap (photo)",lambda:open_faceswap_window())
 make_card(left,4,1,"\U0001f444","Lip sync","Bring a photo to life",lambda:open_lipsync_window())
+make_card(left,5,0,"\U0001f50e","Code search","Index & search your own code — local",lambda:open_rag_window()).grid(columnspan=2,sticky="nsew")
 
 # ---- Right column: service status + memory/stop ----
 tk.Label(right,text="SERVICES",font=small_f,bg=BG,fg=SUB).pack(anchor="w",pady=(2,4))
@@ -552,6 +614,9 @@ for w in [free_f]+list(free_f.winfo_children()): w.bind("<Button-1>",lambda e:fr
 stop_f=tk.Frame(right,bg="#2a1518",cursor="hand2"); stop_f.pack(fill="x",pady=4)
 tk.Label(stop_f,text="⏹  Stop all",font=sub_f,bg="#2a1518",fg=RED).pack(pady=10)
 for w in [stop_f]+list(stop_f.winfo_children()): w.bind("<Button-1>",lambda e:stop_all())
+upd_f=tk.Frame(right,bg="#161a24",cursor="hand2"); upd_f.pack(fill="x",pady=4)
+tk.Label(upd_f,text="⟳  Update (GitHub)",font=small_f,bg="#161a24",fg=ACCENT_LT).pack(pady=8)
+for w in [upd_f]+list(upd_f.winfo_children()): w.bind("<Button-1>",lambda e:studio_update())
 
 def refresh():
     for name,port in SERVICES.items():
@@ -562,7 +627,7 @@ refresh()
 # ---------- Image generator window ----------
 def open_generator():
     from PIL import Image, ImageTk
-    win=tk.Toplevel(root); win.title("OVRLKD - Create images"); win.configure(bg=BG)
+    win=tk.Toplevel(root); win.title("Overlkd - Create images"); win.configure(bg=BG)
     win.geometry("760x860"); win.minsize(560,640); win.resizable(True,True)
     win.lift(); win.focus_force()
     make_frameless(win, "Vulture AI — Create images", win.destroy)
@@ -684,7 +749,7 @@ def open_3d_window():
     from PIL import Image, ImageTk
     if not os.path.exists(os.path.join(cfg.tripo_src_dir, "run.py")):
         _open_cmd(os.path.join(cfg.tripo_dir, "1-Setup-3D-installieren.cmd")); return
-    win=tk.Toplevel(root); win.title("OVRLKD - Image to 3D"); win.configure(bg=BG)
+    win=tk.Toplevel(root); win.title("Overlkd - Image to 3D"); win.configure(bg=BG)
     win.geometry("560x640"); win.lift(); win.focus_force()
     make_frameless(win, "Vulture AI — Image to 3D", win.destroy)
     win._img=None
@@ -748,7 +813,7 @@ def open_3d_window():
 # ---------- Face swap window ----------
 def open_faceswap_window():
     from PIL import Image, ImageTk
-    win=tk.Toplevel(root); win.title("OVRLKD - Face swap"); win.configure(bg=BG)
+    win=tk.Toplevel(root); win.title("Overlkd - Face swap"); win.configure(bg=BG)
     win.geometry("640x760"); win.minsize(560,680); win.lift(); win.focus_force()
     make_frameless(win, "Vulture AI — Face swap", win.destroy)
     win._src=None; win._tgt=None; win._last=None
@@ -819,7 +884,7 @@ def open_faceswap_window():
 # ---------- Lip sync (LivePortrait) window ----------
 def open_lipsync_window():
     from PIL import Image, ImageTk
-    win=tk.Toplevel(root); win.title("OVRLKD - Lip sync"); win.configure(bg=BG)
+    win=tk.Toplevel(root); win.title("Overlkd - Lip sync"); win.configure(bg=BG)
     win.geometry("640x620"); win.minsize(560,560); win.lift(); win.focus_force()
     make_frameless(win, "Vulture AI — Lip sync", win.destroy)
     win._src=None; win._drv=None; win._last=None
@@ -884,5 +949,401 @@ def open_lipsync_window():
             win.after(0,lambda:go.config(state="normal",text="\U0001f444  Bring photo to life"))
         threading.Thread(target=worker,daemon=True).start()
     go.config(command=do_go)
+
+# ---------- Code-RAG window (index & search your own code) ----------
+def open_rag_window():
+    win=tk.Toplevel(root); win.title("Overlkd - Code search"); win.configure(bg=BG)
+    win.geometry("680x720"); win.minsize(580,600); win.lift(); win.focus_force()
+    make_frameless(win, "Vulture AI — Code search", win.destroy)
+    tk.Label(win,text="\U0001f50e Code-RAG",font=title_f,bg=BG,fg=FG).pack(pady=(14,2))
+    tk.Label(win,text="Index your own projects and search them by meaning — 100% local, "
+             "nothing leaves your machine.",font=small_f,bg=BG,fg=SUB,wraplength=620).pack(pady=(0,6))
+
+    # --- service status row ---
+    svc=tk.Frame(win,bg=BG); svc.pack(fill="x",padx=24,pady=(0,4))
+    svc_dot=tk.Label(svc,text="●",font=small_f,bg=BG,fg=RED); svc_dot.pack(side="left")
+    svc_lbl=tk.Label(svc,text=" Service: checking…",font=small_f,bg=BG,fg=SUB); svc_lbl.pack(side="left")
+    svc_btn=tk.Button(svc,text="Start service",font=small_f,bg=CARD,fg=FG,relief="flat",cursor="hand2")
+    svc_btn.pack(side="right")
+
+    # --- indexed projects (live from /stats) ---
+    pjf=tk.Frame(win,bg=BG); pjf.pack(fill="x",padx=24,pady=(0,4))
+    tk.Label(pjf,text="INDEXED",font=small_f,bg=BG,fg=SUB).pack(side="left",anchor="n")
+    proj_lbl=tk.Label(pjf,text="…",font=small_f,bg=BG,fg=ACCENT_LT,justify="left",
+                      wraplength=560,anchor="w"); proj_lbl.pack(side="left",fill="x",expand=True,padx=(8,0))
+
+    st=tk.Label(win,text="Ready.",font=sub_f,bg=BG,fg=GREEN,wraplength=620);
+    def set_st(t): win.after(0,lambda:st.config(text=t))
+
+    def running(): return port_open(cfg.rag_port)
+    def need_service():
+        if running(): return True
+        set_st("Service is not running — click “Start service” first."); return False
+
+    # --- add-to-index section ---
+    idxf=tk.Frame(win,bg=BG); idxf.pack(fill="x",padx=24,pady=(4,2))
+    tk.Label(idxf,text="ADD CODE TO THE INDEX",font=small_f,bg=BG,fg=ACCENT).pack(anchor="w",pady=(2,4))
+
+    def _ingest(project,path):
+        set_st(f"Indexing “{project}” … (first run may take a while)")
+        try:
+            env=dict(os.environ, MEMORY_API_URL=cfg.rag_api)
+            r=subprocess.run([cfg.rag_python, os.path.join(RAG_DIR,"ingest.py"), project, path],
+                             capture_output=True,text=True,env=env,timeout=3600,
+                             creationflags=subprocess.CREATE_NO_WINDOW)
+            lines=[l for l in ((r.stdout or "")+(r.stderr or "")).splitlines() if l.strip()]
+            set_st(lines[-1] if lines else f"Indexed “{project}”.")
+            win.after(0,refresh_projects)
+        except Exception as e:
+            set_st(f"Index error: {e}")
+
+    def pick_and_index():
+        if not need_service(): return
+        path=filedialog.askdirectory(title="Choose a project folder to index",
+                                     initialdir=os.path.expanduser("~"))
+        if not path: return
+        project=os.path.basename(path.rstrip("/\\")) or "project"
+        threading.Thread(target=lambda:_ingest(project,path),daemon=True).start()
+
+    idx_btn=tk.Button(idxf,text="\U0001f4c1  Index a project folder…",font=sub_f,bg=CARD,fg=FG,relief="flat",
+              cursor="hand2",command=pick_and_index); idx_btn.pack(fill="x",pady=2)
+
+    tk.Label(idxf,text="…or clone a public GitHub repo and index it:",font=small_f,bg=BG,fg=SUB).pack(anchor="w",pady=(8,2))
+    ghf=tk.Frame(idxf,bg=BG); ghf.pack(fill="x")
+    gh_var=tk.StringVar()
+    gh_entry=tk.Entry(ghf,textvariable=gh_var,font=sub_f,bg=PANEL,fg=FG,insertbackground=FG,relief="flat")
+    gh_entry.pack(side="left",fill="x",expand=True,ipady=5,padx=(0,6))
+
+    def clone_and_index():
+        if not need_service(): return
+        url=gh_var.get().strip()
+        if not url: set_st("Enter a GitHub repo URL first (e.g. https://github.com/user/repo)."); return
+        def worker():
+            name=url.rstrip("/").split("/")[-1]
+            if name.endswith(".git"): name=name[:-4]
+            name=name or "repo"
+            repos=os.path.join(os.path.dirname(cfg.rag_data_dir),"repos")
+            try: os.makedirs(repos,exist_ok=True)
+            except Exception as e: set_st(f"Cannot create repos folder: {e}"); return
+            dest=os.path.join(repos,name)
+            set_st(f"Cloning {name} …")
+            try:
+                if os.path.isdir(os.path.join(dest,".git")):
+                    subprocess.run(["git","-C",dest,"pull","--ff-only"],capture_output=True,text=True,
+                                   timeout=900,creationflags=subprocess.CREATE_NO_WINDOW)
+                else:
+                    r=subprocess.run(["git","clone","--depth","1",url,dest],capture_output=True,text=True,
+                                     timeout=900,creationflags=subprocess.CREATE_NO_WINDOW)
+                    if r.returncode!=0:
+                        set_st("Clone failed: "+(r.stderr or "").strip()[:140]); return
+            except FileNotFoundError:
+                set_st("git is not installed — install Git to clone repositories."); return
+            except Exception as e:
+                set_st(f"Clone error: {e}"); return
+            _ingest(name,dest)
+        threading.Thread(target=worker,daemon=True).start()
+
+    clone_btn=tk.Button(ghf,text="⬇ Clone & index",font=sub_f,bg=ACCENT_DK,fg="#ffffff",relief="flat",
+              cursor="hand2",command=clone_and_index); clone_btn.pack(side="right")
+
+    # --- search section ---
+    tk.Frame(win,bg=DIV,height=1).pack(fill="x",padx=24,pady=(10,6))
+    srf=tk.Frame(win,bg=BG); srf.pack(fill="x",padx=24)
+    tk.Label(srf,text="SEARCH YOUR CODE",font=small_f,bg=BG,fg=ACCENT).pack(anchor="w",pady=(0,4))
+    qrow=tk.Frame(srf,bg=BG); qrow.pack(fill="x")
+    q_var=tk.StringVar()
+    q_entry=tk.Entry(qrow,textvariable=q_var,font=sub_f,bg=PANEL,fg=FG,insertbackground=FG,relief="flat")
+    q_entry.pack(side="left",fill="x",expand=True,ipady=6,padx=(0,6))
+
+    outf=tk.Frame(win,bg=CARD); outf.pack(fill="both",expand=True,padx=24,pady=(8,4))
+    sb=tk.Scrollbar(outf); sb.pack(side="right",fill="y")
+    out=tk.Text(outf,bg=CARD,fg=FG,font=small_f,relief="flat",wrap="word",
+                yscrollcommand=sb.set,padx=10,pady=8,height=11,bd=0,highlightthickness=0)
+    out.pack(side="left",fill="both",expand=True); sb.config(command=out.yview)
+    out.tag_config("src",foreground=ACCENT_LT,font=sub_f)
+    out.tag_config("score",foreground=SUB)
+    out.tag_config("body",foreground="#c8c8c8")
+    out.insert("end","Results appear here.\n"); out.config(state="disabled")
+
+    def do_search():
+        if not need_service(): return
+        q=q_var.get().strip()
+        if not q: return
+        set_st("Searching …")
+        def worker():
+            try:
+                body=json.dumps({"project":"*","query":q,"top_k":8}).encode()
+                req=urllib.request.Request(cfg.rag_api+"/search",data=body,
+                                           headers={"Content-Type":"application/json"})
+                data=json.loads(urllib.request.urlopen(req,timeout=30).read())
+                res=data.get("results",[])
+                def render():
+                    out.config(state="normal"); out.delete("1.0","end")
+                    if not res:
+                        out.insert("end","No matches yet. Index a project or repo above, then search.\n","body")
+                    for it in res:
+                        src=it.get("source","?"); sc=it.get("score",0.0)
+                        txt=(it.get("text","") or "").strip()
+                        out.insert("end",f"{src}   ","src"); out.insert("end",f"{sc:.2f}\n","score")
+                        out.insert("end",(txt[:420]+("…" if len(txt)>420 else ""))+"\n\n","body")
+                    out.config(state="disabled")
+                win.after(0,render); set_st(f"{len(res)} result(s).")
+            except Exception as e:
+                set_st(f"Search error: {e}")
+        threading.Thread(target=worker,daemon=True).start()
+
+    search_btn=tk.Button(qrow,text="\U0001f50e Search",font=sub_f,bg=ACCENT,fg="#ffffff",relief="flat",
+              cursor="hand2",activebackground=ACCENT_DK,activeforeground="#ffffff",
+              command=do_search); search_btn.pack(side="right")
+    q_entry.bind("<Return>",lambda e:do_search())
+
+    st.pack(side="bottom",pady=(2,10))
+
+    # --- service control + polling ---
+    def do_start_svc(visible=False):
+        set_st("Starting Code-RAG service (hidden, no window). First run downloads the embed model (~90 MB).")
+        start_rag_service(visible=visible)
+        def wait_up():
+            for _ in range(90):
+                if running():
+                    set_st("Service is up. Ready to index and search."); win.after(0,refresh_projects); return
+                time.sleep(1)
+            set_st("Service did not start — the RAG needs its Python deps. Run setup/install.py to create the "
+                   "RAG venv, or Shift-click “Start service” to open a console and see the error.")
+        threading.Thread(target=wait_up,daemon=True).start()
+    def do_stop_svc():
+        set_st("Stopping Code-RAG service…")
+        stop_service_port(cfg.rag_port)
+    # Shift-click the service button = start with a visible console (for debugging)
+    svc_btn.bind("<Shift-Button-1>", lambda e: do_start_svc(visible=True))
+
+    def refresh_projects():
+        def worker():
+            try:
+                data=json.loads(urllib.request.urlopen(cfg.rag_api+"/stats",timeout=8).read())
+                projs=[p for p in data.get("projects",[]) if p not in ("*",)]
+                txt=(", ".join(projs)+f"   ({len(projs)})") if projs else "nothing indexed yet"
+            except Exception:
+                txt="(service not running)"
+            win.after(0,lambda:proj_lbl.config(text=txt))
+        threading.Thread(target=worker,daemon=True).start()
+    refresh_projects()
+
+    action_widgets=[idx_btn, gh_entry, clone_btn, q_entry, search_btn]
+    def refresh_svc():
+        if not win.winfo_exists(): return
+        up=running()
+        svc_dot.config(fg=GREEN if up else RED)
+        svc_lbl.config(text=(f" Service: running on :{cfg.rag_port}" if up else " Service: stopped (Shift-click = console)"))
+        svc_btn.config(state="normal",
+                       text=("Stop service" if up else "Start service"),
+                       command=(do_stop_svc if up else do_start_svc))
+        for w in action_widgets:
+            try: w.config(state="normal" if up else "disabled")
+            except tk.TclError: pass
+        win.after(2000,refresh_svc)
+    refresh_svc()
+
+# ---------- Setup / install window (one-click, no terminal) ----------
+# Baseline timings on a GTX 1060 6GB (multiplier = 1.0). Displayed values scale
+# with the detected hardware. All rough — real speed varies with model/settings.
+def _setup_infer_op(name):
+    n=(name or "").lower()
+    if "flux" in n: return "flux"
+    if "upscale" in n or "ultrasharp" in n or "4x" in n: return "upscale"
+    if "reactor" in n or "swap" in n or "inswapper" in n or "buffalo" in n or "face" in n: return "faceswap"
+    if "liveportrait" in n or "lip" in n or ("portrait" in n and "live" in n): return "lipsync"
+    if any(k in n for k in ("sd1.5","sd15","dreamshaper","realistic","toonyou","safetensors")): return "sd15"
+    return ""
+
+def _setup_estimate(op, mult):
+    # Returns a short rough estimate string (already incl. "~"), or "" if unknown.
+    if not mult or mult<=0: return ""
+    if op=="flux":     return f"~{240/mult:.0f} s/image"
+    if op=="sd15":     return f"~{20/mult:.0f} s/image"
+    if op=="upscale":  return f"~{180/mult:.0f} s for 4K"
+    if op=="faceswap": return f"~{169/mult:.0f} s"
+    if op=="lipsync":  return f"~{44/mult:.0f} s (40 frames)"
+    if op=="llm":      return f"~{8*mult:.0f} tok/s"
+    return ""
+
+def _setup_fmt_size(mb):
+    try: mb=float(mb)
+    except Exception: return ""
+    if mb<=0: return ""
+    return f"{mb/1024:.1f} GB" if mb>=1024 else f"{mb:.0f} MB"
+
+def _setup_load_models():
+    """Return (groups, from_manifest). ``groups`` is a list of
+    (group_label, [(name, size_mb, op), ...]). Sourced from
+    setup/models.manifest.json if present, else a hardcoded fallback."""
+    models=ollama=None; from_manifest=False
+    mpath=os.path.join(_APPDIR,"setup","models.manifest.json")
+    try:
+        with open(mpath,"r",encoding="utf-8") as f:
+            data=json.load(f)
+        models=data.get("models") or []
+        ollama=data.get("ollama") or []
+        from_manifest=True
+    except Exception:
+        models=None; ollama=None
+    if models is None:
+        models=[
+            {"name":"FLUX schnell (GGUF Q4)","approx_size_mb":6500,"op":"flux"},
+            {"name":"DreamShaper v8 (SD1.5)","approx_size_mb":2000,"op":"sd15"},
+            {"name":"Realistic Vision v6 (SD1.5)","approx_size_mb":2000,"op":"sd15"},
+            {"name":"ToonYou v6 (SD1.5)","approx_size_mb":2000,"op":"sd15"},
+            {"name":"4x-UltraSharp upscaler","approx_size_mb":67,"op":"upscale"},
+            {"name":"ReActor face swap (inswapper_128 + buffalo_l)","approx_size_mb":600,"op":"faceswap"},
+            {"name":"LivePortrait (lip sync)","approx_size_mb":500,"op":"lipsync"},
+        ]
+        ollama=[{"name":"qwen2.5-coder:7b","approx_size_mb":4700},
+                {"name":"qwen3.5:9b","approx_size_mb":5500}]
+    imgs=[]; vids=[]; llms=[]
+    for m in (models or []):
+        nm=m.get("name","?"); sz=m.get("approx_size_mb",0)
+        op=m.get("op") or _setup_infer_op(nm)
+        row=(nm,sz,op)
+        (vids if op in ("faceswap","lipsync") else imgs).append(row)
+    for o in (ollama or []):
+        if isinstance(o,dict): nm=o.get("name","?"); sz=o.get("approx_size_mb",0)
+        else: nm=str(o); sz=0
+        llms.append((nm,sz,"llm"))
+    groups=[]
+    if imgs: groups.append(("IMAGES & UPSCALE",imgs))
+    if vids: groups.append(("FACE & VIDEO",vids))
+    if llms: groups.append(("LOCAL CHAT (LLM)",llms))
+    return groups, from_manifest
+
+def open_setup_window():
+    win=tk.Toplevel(root); win.title("Overlkd - Setup & install"); win.configure(bg=BG)
+    win.geometry("720x760"); win.minsize(620,620); win.resizable(True,True)
+    win.lift(); win.focus_force()
+    make_frameless(win, "Vulture AI — Setup & install", win.destroy)
+
+    tk.Label(win,text="⚙ Setup & install",font=title_f,bg=BG,fg=FG).pack(pady=(14,2))
+    tk.Label(win,text="One click installs everything — no terminal needed.",
+             font=small_f,bg=BG,fg=SUB,wraplength=660).pack(pady=(0,8))
+
+    # --- A) Hardware check ---
+    hwcard=tk.Frame(win,bg=CARD); hwcard.pack(fill="x",padx=24,pady=(0,6))
+    hw_lbl=tk.Label(hwcard,text="Detecting hardware…",font=sub_f,bg=CARD,fg=ACCENT_LT,
+                    anchor="w",wraplength=560,justify="left")
+    hw_lbl.pack(side="left",fill="x",expand=True,padx=10,pady=8)
+    redet=tk.Label(hwcard,text="↻ Re-detect",font=small_f,bg=CARD,fg=SUB,cursor="hand2")
+    redet.pack(side="right",padx=10)
+
+    # --- B) Model list with hardware-scaled speed estimates ---
+    groups,from_manifest=_setup_load_models()
+    models_frame=tk.Frame(win,bg=BG); models_frame.pack(fill="x",padx=24,pady=(0,4))
+    def render_models(mult):
+        for w in models_frame.winfo_children():
+            try: w.destroy()
+            except Exception: pass
+        tk.Label(models_frame,text="Estimated on YOUR hardware (rough — real speed varies):",
+                 font=small_f,bg=BG,fg=SUB).pack(anchor="w",pady=(2,2))
+        for gname,rows in groups:
+            tk.Label(models_frame,text=gname,font=small_f,bg=BG,fg=ACCENT).pack(anchor="w",pady=(5,1))
+            for nm,sz,op in rows:
+                est=_setup_estimate(op,mult); size=_setup_fmt_size(sz)
+                parts=[p for p in (nm,size,est) if p]
+                tk.Label(models_frame,text="  "+"  ·  ".join(parts),font=small_f,
+                         bg=BG,fg=FG,anchor="w",wraplength=640,justify="left").pack(anchor="w")
+
+    def detect_worker():
+        gpu=detect_gpu(); ram=detect_ram_gb()
+        mult=speed_multiplier(gpu.get("vram_gb",0.0), gpu.get("name",""))
+        def apply():
+            if not win.winfo_exists(): return
+            if gpu.get("name"):
+                hw_lbl.config(text=f"GPU: {gpu['name']} · {gpu['vram_gb']:.0f} GB VRAM"
+                                   f"   |   RAM: {ram:.0f} GB")
+            else:
+                hw_lbl.config(text="No NVIDIA GPU detected (CPU mode — very slow)"
+                                   f"   |   RAM: {ram:.0f} GB")
+            render_models(mult)
+        win.after(0,apply)
+    def redetect():
+        hw_lbl.config(text="Detecting hardware…")
+        threading.Thread(target=detect_worker,daemon=True).start()
+    redet.bind("<Button-1>",lambda e:redetect())
+
+    tk.Frame(win,bg=DIV,height=1).pack(fill="x",padx=24,pady=(8,6))
+
+    # --- C) One-click install (streams the installer output, no terminal) ---
+    INSTALLER=os.path.join(_APPDIR,"setup","install.py")
+    have_installer=os.path.exists(INSTALLER)
+
+    st=tk.Label(win,text="Ready." if have_installer else "Installer not found.",
+                font=sub_f,bg=BG,fg=GREEN,wraplength=660)
+    def set_st(t): win.after(0,lambda:st.config(text=t))
+
+    btnrow=tk.Frame(win,bg=BG); btnrow.pack(fill="x",padx=24,pady=(2,2))
+    install_btn=tk.Button(btnrow,text="⤓  Install everything",font=btn_f,bg=ACCENT,fg="#ffffff",
+                          relief="flat",cursor="hand2",activebackground=ACCENT_DK,activeforeground="#ffffff")
+    install_btn.pack(fill="x",pady=(0,4))
+    check_btn=tk.Button(btnrow,text="🔍  Check what's missing",font=sub_f,bg=CARD,fg=ACCENT_LT,
+                        relief="flat",cursor="hand2",activebackground=PANEL,activeforeground=FG)
+    check_btn.pack(fill="x")
+
+    note_lbl=tk.Label(win,font=small_f,bg=BG,fg=SUB,wraplength=660,justify="left")
+    if not have_installer:
+        note_lbl.config(text="Installer not found — this looks like a dev copy. In a fresh "
+                             "`git clone` the setup/ folder is present.")
+        note_lbl.pack(fill="x",padx=24,pady=(4,2))
+
+    # --- output log (read-only, dark; like the Code-RAG results box) ---
+    outf=tk.Frame(win,bg=CARD); outf.pack(fill="both",expand=True,padx=24,pady=(6,4))
+    sb=tk.Scrollbar(outf); sb.pack(side="right",fill="y")
+    log=tk.Text(outf,bg=CARD,fg="#c8c8c8",font=("Consolas",9),relief="flat",wrap="word",
+                yscrollcommand=sb.set,padx=10,pady=8,height=12,bd=0,highlightthickness=0)
+    log.pack(side="left",fill="both",expand=True); sb.config(command=log.yview)
+    log.insert("end","Install progress will appear here.\n"); log.config(state="disabled")
+    st.pack(side="bottom",pady=(2,10))
+
+    def _log(s):
+        def _do():
+            if not win.winfo_exists(): return
+            log.config(state="normal"); log.insert("end",s); log.see("end"); log.config(state="disabled")
+        win.after(0,_do)
+    def _log_clear():
+        def _do():
+            if not win.winfo_exists(): return
+            log.config(state="normal"); log.delete("1.0","end"); log.config(state="disabled")
+        win.after(0,_do)
+
+    def run_installer(args, label):
+        # Stream `python setup/install.py [args]` line-by-line into the log box.
+        # All subprocess reads happen here in the worker thread; every widget
+        # update goes through win.after -> the Tk main thread is never blocked.
+        def worker():
+            win.after(0,lambda:(install_btn.config(state="disabled"),check_btn.config(state="disabled")))
+            set_st(label+" …")
+            _log_clear()
+            py=cfg.system_python or sys.executable
+            _log(f"$ \"{py}\" setup/install.py {' '.join(args)}\n\n")
+            try:
+                proc=subprocess.Popen([py, INSTALLER]+list(args), cwd=_APPDIR,
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                    bufsize=1, creationflags=subprocess.CREATE_NO_WINDOW)
+                for line in iter(proc.stdout.readline, ""):
+                    _log(line)
+                proc.stdout.close()
+                code=proc.wait()
+                _log(f"\n[exit {code}] "+("done." if code==0 else "finished with errors.")+"\n")
+                set_st(f"{label} finished (exit {code}).")
+            except Exception as e:
+                _log(f"\n[error] {e}\n"); set_st(f"{label} error: {e}")
+            finally:
+                win.after(0,lambda:(install_btn.config(state="normal"),check_btn.config(state="normal")))
+        threading.Thread(target=worker,daemon=True).start()
+
+    if have_installer:
+        install_btn.config(command=lambda:run_installer([], "Install"))
+        check_btn.config(command=lambda:run_installer(["--list"], "Check"))
+    else:
+        install_btn.config(state="disabled"); check_btn.config(state="disabled")
+
+    redetect()  # auto-run the hardware check on open
 
 root.mainloop()

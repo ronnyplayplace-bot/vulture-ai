@@ -1,8 +1,8 @@
 @echo off
-title OVRLKD Studio AI
+title Overlkd Studio AI
 echo ===================================================
-echo    Starting OVRLKD Studio AI ...
-echo    (Ollama + Code-RAG + VPS tunnel + WebUI)
+echo    Starting Overlkd Studio AI ...
+echo    (Ollama + Code-RAG + WebUI)
 echo ===================================================
 
 REM Load portable paths/ports from the config (vulture\batenv.py)
@@ -17,20 +17,17 @@ REM 1) Ollama (model runtime), if not already active
 tasklist /FI "IMAGENAME eq ollama.exe" | find /I "ollama.exe" >nul || start "" "%LOCALAPPDATA%\Programs\Ollama\ollama.exe" serve
 
 REM 2) Local Code-RAG (port %RAG_PORT%) - only if not already open
-netstat -an | find ":%RAG_PORT% " | find "LISTENING" >nul || start "OVRLKD Memory" /min "%TOOLS_DIR%\start-local-memory.cmd"
+netstat -an | find ":%RAG_PORT% " | find "LISTENING" >nul || start "Overlkd Memory" /min "%TOOLS_DIR%\start-local-memory.cmd"
 
-REM 3) VPS tunnel for chat memory (port %TUNNEL_PORT%)
-netstat -an | find ":%TUNNEL_PORT% " | find "LISTENING" >nul || start "OVRLKD Tunnel" /min "%TOOLS_DIR%\start-tunnel.cmd"
+REM 3) Open WebUI (port %WEBUI_PORT%)
+netstat -an | find ":%WEBUI_PORT% " | find "LISTENING" >nul || start "Overlkd WebUI" /min "%TOOLS_DIR%\start-webui.cmd"
 
-REM 4) Open WebUI (port %WEBUI_PORT%)
-netstat -an | find ":%WEBUI_PORT% " | find "LISTENING" >nul || start "OVRLKD WebUI" /min "%TOOLS_DIR%\start-webui.cmd"
-
-REM 5) ComfyUI (port %COMFY_PORT%) - optional, only if already installed
+REM 4) ComfyUI (port %COMFY_PORT%) - optional, only if already installed
 if exist "%COMFY_PY%" (
-    netstat -an | find ":%COMFY_PORT% " | find "LISTENING" >nul || start "OVRLKD Images" /min /D "%COMFY_DIR%" "%COMFY_PY%" main.py --listen 127.0.0.1 --port %COMFY_PORT% --output-directory "%OUTPUT_DIR%" --cuda-device 0 --lowvram
+    netstat -an | find ":%COMFY_PORT% " | find "LISTENING" >nul || start "Overlkd Images" /min /D "%COMFY_DIR%" "%COMFY_PY%" main.py --listen 127.0.0.1 --port %COMFY_PORT% --output-directory "%OUTPUT_DIR%" --cuda-device 0 --lowvram
 )
 
-REM 6) Open the browser (except on autostart with the "silent" argument)
+REM 5) Open the browser (except on autostart with the "silent" argument)
 if /I "%~1"=="silent" goto ende
 echo.
 echo Waiting a moment for everything to come up, then the browser opens ...

@@ -1,5 +1,5 @@
 {
-  "_about": "Vulture AI (OVRLKD Studio) configuration. Copy this file to 'config.json' (same folder, next to studio.py) and edit the values for YOUR machine. Nothing here is machine-specific by design: pick your own drive letter, username and install location.",
+  "_about": "Vulture AI (Overlkd Studio) configuration. Copy this file to 'config.json' (same folder, next to studio.py) and edit the values for YOUR machine. Nothing here is machine-specific by design: pick your own drive letter, username and install location.",
   "_how_it_works": "The loader (vulture/config.py) layers three sources: built-in defaults  <-  AUTO-DETECTION (scans all drives for ComfyUI / Ollama / Python)  <-  this file. So you only need to set the values auto-detection cannot guess (or the ones it guessed wrong). Any key you delete or leave as \"\" (empty string) falls back to auto-detect, then to a sensible default.",
   "_notes": [
     "Forward slashes '/' and back slashes '\\\\' both work; the loader normalises them for Windows.",
@@ -27,10 +27,10 @@
     "_output_dir": "Where generated images/videos are written and opened from.",
 
     "tools_dir": "",
-    "_tools_dir": "Optional: the 'ai-memory-tools' folder holding start-webui.cmd / start-local-memory.cmd / start-tunnel.cmd (Chat + Code-RAG + VPS tunnel). Leave \"\" if you do not use these extras.",
+    "_tools_dir": "Optional: the 'ai-memory-tools' folder holding start-webui.cmd / start-local-memory.cmd (Chat + Code-RAG). Leave \"\" if you do not use these extras.",
 
     "launchers_dir": "",
-    "_launchers_dir": "Folder that holds OVRLKD-KI.cmd, KI-Coder.cmd, KI-Status.cmd. Empty => the repo root (folder that contains studio.py).",
+    "_launchers_dir": "Folder that holds Overlkd-Start.cmd, Overlkd-Coder.cmd, Overlkd-Status.cmd. Empty => the repo root (folder that contains studio.py).",
 
     "tripo_dir": "D:/tripo3d",
     "tripo_python": "D:/tripo3d/venv/Scripts/python.exe",
@@ -46,14 +46,20 @@
     "_ollama_models_dir": "Where Ollama stores models (sets the OLLAMA_MODELS env var). Empty => Ollama default (~/.ollama/models).",
 
     "system_python": "",
-    "_system_python": "System Python 3.11 (used by KI-Coder.cmd helpers). Empty => auto-detect.",
+    "_system_python": "System Python 3.11 (used by Overlkd-Coder.cmd helpers). Empty => auto-detect.",
 
     "aider_python": "D:/ai-coder/venv/Scripts/python.exe",
     "_aider_python": "python.exe of the Aider coding-agent venv. Optional (coding agent only).",
 
     "hf_cache_dir": "D:/hf-cache",
     "pip_cache_dir": "D:/pip-cache",
-    "_caches": "Optional: keep HuggingFace + pip caches off C:. Empty => system defaults."
+    "_caches": "Optional: keep HuggingFace + pip caches off C:. Empty => system defaults.",
+
+    "qdrant_path": "",
+    "_qdrant_path": "Code-RAG: local embedded-Qdrant store (your code never leaves the PC; this is NOT a server). Empty => %LOCALAPPDATA%/VultureAI/rag/qdrant. Point it at a roomy drive if you index a lot.",
+
+    "rag_data_dir": "",
+    "_rag_data_dir": "Code-RAG: folder for the project registry; the fastembed model cache is kept next to it. Empty => %LOCALAPPDATA%/VultureAI/rag/data."
   },
 
   "network": {
@@ -62,8 +68,7 @@
     "comfy_port": 8188,
     "webui_port": 8080,
     "ollama_port": 11434,
-    "rag_port": 8001,
-    "tunnel_port": 8000
+    "rag_port": 8001
   },
 
   "runtime": {
@@ -85,7 +90,13 @@
     "_enhance_model": "Ollama model used by the 'optimise prompt' feature (turns casual/German text into an English FLUX prompt).",
 
     "coder_model": "qwen2.5-coder:7b",
-    "_coder_model": "Default Ollama model for the coding agent. The author prefers 'qwen3.5:9b' on bigger GPUs; 'qwen2.5-coder:7b' is the safe 6GB default."
+    "_coder_model": "Default Ollama model for the coding agent. The author prefers 'qwen3.5:9b' on bigger GPUs; 'qwen2.5-coder:7b' is the safe 6GB default.",
+
+    "embed_model": "BAAI/bge-small-en-v1.5",
+    "_embed_model": "Code-RAG: fastembed embedding model (CPU/ONNX, downloaded on first run). bge-small is a fast, small default; change only if you understand the size/quality trade-off.",
+
+    "rag_collection": "vulture_code",
+    "_rag_collection": "Code-RAG: the Qdrant collection to index into. Use different names to keep separate indexes side by side."
   },
 
   "models": {

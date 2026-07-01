@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-title OVRLKD Coding Agent (Aider)
+title Overlkd Coding Agent (Aider)
 
 REM Load portable paths/ports from the config (vulture\batenv.py)
 set "PYEXE=python"
@@ -14,7 +14,7 @@ REM Auto-tune: adjust num_ctx automatically to the current GPU (more VRAM = more
 
 cls
 echo ==========================================================
-echo    OVRLKD Coding Agent  (Aider + local models)
+echo    Overlkd Coding Agent  (Aider + local models)
 echo ==========================================================
 echo.
 echo   Choose a model:

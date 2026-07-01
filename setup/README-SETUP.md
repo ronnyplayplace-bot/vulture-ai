@@ -1,6 +1,6 @@
 # Vulture AI — Setup
 
-Get Vulture AI (OVRLKD Studio) running on your own machine. Everything is
+Get Vulture AI (Overlkd Studio) running on your own machine. Everything is
 offline; the models are downloaded from their original sources into **your**
 folders — nothing is bundled and nothing leaves your PC.
 
@@ -65,7 +65,7 @@ Exit code is `0` when all required checks pass.
 
 ```bat
 python studio.py
-:: or double-click OVRLKD-Studio.cmd
+:: or double-click Overlkd-Studio.cmd
 ```
 
 ## Configuration

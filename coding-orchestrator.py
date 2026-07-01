@@ -1,4 +1,4 @@
-# OVRLKD auto-splitter for the coding agent.
+# Overlkd auto-splitter for the coding agent.
 # ONE big prompt in -> the planner model breaks it into small steps ->
 # Aider works through them one after another automatically (each step small = no token crash,
 # no truncated content). No tiny-snippet typing needed.

@@ -1,0 +1,8 @@
+# Vulture AI -- local code-RAG server dependencies.
+# CPU-only, no PyTorch: fastembed ships ONNX runtime. Install into the RAG venv
+# (setup/install.py creates one) or any Python 3.11 with:  pip install -r requirements.txt
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+qdrant-client==1.12.1
+fastembed==0.5.1
+pydantic==2.10.4

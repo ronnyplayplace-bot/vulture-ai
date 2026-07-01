@@ -1,5 +1,5 @@
 # Auto-tune: detects GPU VRAM + architecture, sets num_ctx per model accordingly.
-# Runs on every KI-Coder start -> swap the GPU = automatically more context.
+# Runs on every Overlkd-Coder start -> swap the GPU = automatically more context.
 import subprocess, os
 
 SETTINGS = os.path.join(os.path.expanduser("~"), ".aider.model.settings.yml")
@@ -37,8 +37,8 @@ EXTRA = {  # use_repo_map / phi etc.
 
 def build(vram, cap):
     t, pascal = tier(vram, cap)
-    lines = [f"# OVRLKD Aider model settings - AUTO-tuned for {vram:.0f}GB VRAM (cap {cap}){' [Pascal cap]' if pascal else ''}",
-             "# Regenerated on every KI-Coder start (auto-tune-ctx.py). Do not edit by hand.\n"]
+    lines = [f"# Overlkd Aider model settings - AUTO-tuned for {vram:.0f}GB VRAM (cap {cap}){' [Pascal cap]' if pascal else ''}",
+             "# Regenerated on every Overlkd-Coder start (auto-tune-ctx.py). Do not edit by hand.\n"]
     for model, sizes in CTX.items():
         ctx = sizes[t]
         if pascal: ctx = min(ctx, 12288)  # Pascal FA-crash guard

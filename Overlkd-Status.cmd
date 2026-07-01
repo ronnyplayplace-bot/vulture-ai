@@ -1,5 +1,5 @@
 @echo off
-title OVRLKD AI Status (RAM / VRAM / GPU)
+title Overlkd AI Status (RAM / VRAM / GPU)
 
 REM Load portable paths/ports from the config (vulture\batenv.py) - once, before the loop
 set "PYEXE=python"
@@ -9,7 +9,7 @@ for /f "usebackq delims=" %%L in (`"%PYEXE%" "%~dp0vulture\batenv.py" 2^>nul`) d
 :loop
 cls
 echo ============================================================
-echo   OVRLKD AI System Status   (refreshes every 5s)
+echo   Overlkd AI System Status   (refreshes every 5s)
 echo ============================================================
 echo.
 
@@ -35,7 +35,7 @@ echo.
 
 rem --- Services ---
 echo [Services]
-for %%P in (%WEBUI_PORT% %COMFY_PORT% %TUNNEL_PORT% %RAG_PORT% %OLLAMA_PORT%) do (
+for %%P in (%WEBUI_PORT% %COMFY_PORT% %RAG_PORT% %OLLAMA_PORT%) do (
     netstat -ano 2>nul | find ":%%P " | find "LISTEN" >nul && echo   Port %%P: ACTIVE || echo   Port %%P: off
 )
 echo.

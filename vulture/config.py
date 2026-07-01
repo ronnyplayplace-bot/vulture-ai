@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Portable configuration for Vulture AI (OVRLKD Studio).
+"""Portable configuration for Vulture AI (Overlkd Studio).
 
 The original ``studio.py`` baked in machine-specific paths such as
 ``C:\\Users\\User\\ai-memory-tools`` and ``D:\\comfyui\\output``.  That breaks on
@@ -78,6 +78,9 @@ DEFAULTS: Dict[str, Any] = {
         "aider_python": "",
         "hf_cache_dir": "",
         "pip_cache_dir": "",
+        # Code-RAG local storage (empty -> derived under _rag_base_dir()).
+        "qdrant_path": "",
+        "rag_data_dir": "",
     },
     "network": {
         "host": "127.0.0.1",
@@ -85,7 +88,6 @@ DEFAULTS: Dict[str, Any] = {
         "webui_port": 8080,
         "ollama_port": 11434,
         "rag_port": 8001,
-        "tunnel_port": 8000,
     },
     "runtime": {
         "cuda_device": 0,
@@ -94,6 +96,9 @@ DEFAULTS: Dict[str, Any] = {
         "comfy_extra_args": "",
         "enhance_model": "qwen2.5-coder:7b",
         "coder_model": "qwen2.5-coder:7b",
+        # Code-RAG (local semantic search over your own projects).
+        "embed_model": "BAAI/bge-small-en-v1.5",
+        "rag_collection": "vulture_code",
     },
     "models": {
         "flux_unet": "flux1-schnell-Q4_K_S.gguf",
@@ -113,7 +118,6 @@ SERVICE_PORT_KEYS = {
     "Chat/Images (WebUI)": "webui_port",
     "ComfyUI/FLUX": "comfy_port",
     "Code-RAG": "rag_port",
-    "VPS-Tunnel": "tunnel_port",
 }
 
 
@@ -181,6 +185,21 @@ def _norm(path: str) -> str:
     if not path:
         return ""
     return os.path.normpath(os.path.expandvars(os.path.expanduser(str(path))))
+
+
+def _rag_base_dir() -> str:
+    """Drive-agnostic base folder for the local code-RAG's private data.
+
+    Everything the RAG writes -- the embedded Qdrant store, the project registry
+    and the fastembed model cache -- lives under here.  Uses ``%LOCALAPPDATA%``
+    on Windows and ``~/.local/share`` elsewhere, so no drive letter or user name
+    is baked in and nothing is written into the repo.  The individual folders can
+    still be redirected via the ``qdrant_path`` / ``rag_data_dir`` config keys.
+    """
+    base = os.environ.get("LOCALAPPDATA", "") if os.name == "nt" else ""
+    if not base:
+        base = os.path.join(os.path.expanduser("~"), ".local", "share")
+    return os.path.join(base, "VultureAI", "rag")
 
 
 # --------------------------------------------------------------------------- #
@@ -294,7 +313,7 @@ def _detect_tripo(drives: List[str]) -> Dict[str, str]:
 def _detect_aider_python(drives: List[str]) -> str:
     """Locate the Python of an optional Aider coding-agent venv.
 
-    Mirrors the ``ai-coder\\venv`` layout the KI-Coder launcher expects; falls
+    Mirrors the ``ai-coder\\venv`` layout the Overlkd-Coder launcher expects; falls
     back to a few common variants so a fresh clone finds it without editing
     ``config.json``.
     """
@@ -322,7 +341,7 @@ def _detect_tools_dir(drives: List[str]) -> str:
     for d in drives:
         candidates += [
             os.path.join(d, "ai-memory-tools"),
-            os.path.join(d, "OVRLKD", "apps", "ai-memory-tools"),
+            os.path.join(d, "Overlkd", "apps", "ai-memory-tools"),
         ]
     return _first_existing(candidates)
 
@@ -526,6 +545,42 @@ class Config:
     def pip_cache_dir(self) -> str:
         return _norm(self._p("pip_cache_dir"))
 
+    # -- code-RAG (local, private semantic code search) ------------------- #
+    @property
+    def qdrant_path(self) -> str:
+        """Embedded-Qdrant store for the code-RAG; derived under the RAG base
+        folder when not set.  This is a local path, never a Qdrant server."""
+        v = self._p("qdrant_path")
+        if not v:
+            v = os.path.join(_rag_base_dir(), "qdrant")
+        return _norm(v)
+
+    @property
+    def rag_data_dir(self) -> str:
+        """Folder for the RAG project registry; derived under the RAG base
+        folder when not set."""
+        v = self._p("rag_data_dir")
+        if not v:
+            v = os.path.join(_rag_base_dir(), "data")
+        return _norm(v)
+
+    @property
+    def rag_cache_dir(self) -> str:
+        """fastembed model cache; kept next to :attr:`rag_data_dir`."""
+        return _norm(os.path.join(os.path.dirname(self.rag_data_dir), "cache"))
+
+    @property
+    def rag_python(self) -> str:
+        """Interpreter that runs the RAG server: its dedicated venv (created by
+        ``setup/install.py``) when present, otherwise the system Python."""
+        base = _rag_base_dir()
+        candidates = [
+            os.path.join(base, "venv", "Scripts", "python.exe"),  # Windows
+            os.path.join(base, "venv", "bin", "python"),          # POSIX
+        ]
+        found = _first_existing(candidates)
+        return _norm(found) if found else self.system_python
+
     # -- launcher files (resolved against launchers_dir) ------------------ #
     def launcher(self, filename: str) -> str:
         """Absolute path to a ``.cmd`` launcher inside :attr:`launchers_dir`."""
@@ -533,15 +588,15 @@ class Config:
 
     @property
     def start_all_cmd(self) -> str:
-        return self.launcher("OVRLKD-KI.cmd")
+        return self.launcher("Overlkd-Start.cmd")
 
     @property
     def coder_cmd(self) -> str:
-        return self.launcher("KI-Coder.cmd")
+        return self.launcher("Overlkd-Coder.cmd")
 
     @property
     def status_cmd(self) -> str:
-        return self.launcher("KI-Status.cmd")
+        return self.launcher("Overlkd-Status.cmd")
 
     # -- network ---------------------------------------------------------- #
     @property
@@ -565,10 +620,6 @@ class Config:
         return int(self._n("rag_port"))
 
     @property
-    def tunnel_port(self) -> int:
-        return int(self._n("tunnel_port"))
-
-    @property
     def comfy_api(self) -> str:
         """HTTP base URL of the ComfyUI API, e.g. ``http://127.0.0.1:8188``."""
         return f"http://{self.host}:{self.comfy_port}"
@@ -587,6 +638,11 @@ class Config:
     def webui_url(self) -> str:
         """Browser URL for Open WebUI (chat)."""
         return f"http://localhost:{self.webui_port}"
+
+    @property
+    def rag_api(self) -> str:
+        """HTTP base URL of the local code-RAG server, e.g. ``http://127.0.0.1:8001``."""
+        return f"http://{self.host}:{self.rag_port}"
 
     @property
     def services(self) -> Dict[str, int]:
@@ -628,6 +684,16 @@ class Config:
     @property
     def coder_model(self) -> str:
         return str(self._r("coder_model") or "qwen2.5-coder:7b")
+
+    @property
+    def embed_model(self) -> str:
+        """fastembed model name used by the code-RAG (CPU, ONNX)."""
+        return str(self._r("embed_model") or "BAAI/bge-small-en-v1.5")
+
+    @property
+    def rag_collection(self) -> str:
+        """Qdrant collection name the code-RAG indexes into."""
+        return str(self._r("rag_collection") or "vulture_code")
 
     # -- model filenames -------------------------------------------------- #
     @property
@@ -803,6 +869,12 @@ if __name__ == "__main__":
         ("comfy_ws", cfg.comfy_ws),
         ("ollama_api", cfg.ollama_api),
         ("webui_url", cfg.webui_url),
+        ("rag_api", cfg.rag_api),
+        ("rag_python", cfg.rag_python),
+        ("qdrant_path", cfg.qdrant_path),
+        ("rag_data_dir", cfg.rag_data_dir),
+        ("embed_model", cfg.embed_model),
+        ("rag_collection", cfg.rag_collection),
         ("vram_tier", cfg.vram_tier),
         ("comfy_vram_flag", cfg.comfy_vram_flag),
         ("enhance_model", cfg.enhance_model),

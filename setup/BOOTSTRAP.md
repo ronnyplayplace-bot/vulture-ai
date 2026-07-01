@@ -39,7 +39,7 @@ setup/models.manifest.json   what to install (ComfyUI, nodes, models, LLMs)
 setup/README-SETUP.md        user quick-start
 setup/BOOTSTRAP.md           this file
 REFACTOR-MAP.md              how studio.py maps onto config
-OVRLKD-*.cmd, KI-*.cmd       launchers
+Overlkd-*.cmd                launchers
 rtx-setup/*.cmd              optional RTX-era upgrade waves
 ```
 
