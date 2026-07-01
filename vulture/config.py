@@ -530,7 +530,23 @@ class Config:
 
     @property
     def aider_python(self) -> str:
-        return _norm(self._p("aider_python"))
+        """Interpreter that runs Aider: an explicit config value, else its dedicated
+        venv (setup/install.py puts it under install_base -> <base>/VultureAI/aider,
+        mirroring the RAG venv), else a legacy auto-detected ai-coder venv."""
+        v = self._p("aider_python")
+        if v and os.path.exists(v):
+            return _norm(v)
+        base = self.install_base
+        if base:
+            aider_base = os.path.join(base, "VultureAI", "aider")
+        else:
+            aider_base = os.path.join(os.path.dirname(_rag_base_dir()), "aider")
+        for c in (os.path.join(aider_base, "venv", "Scripts", "python.exe"),
+                  os.path.join(aider_base, "venv", "bin", "python")):
+            if os.path.exists(c):
+                return _norm(c)
+        det = _detect_aider_python(_available_drives())
+        return _norm(det) if det else ""
 
     @property
     def hf_cache_dir(self) -> str:

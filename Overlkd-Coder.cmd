@@ -7,6 +7,13 @@ set "PYEXE=python"
 where python >nul 2>nul || set "PYEXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
 for /f "usebackq delims=" %%L in (`"%PYEXE%" "%~dp0vulture\batenv.py" 2^>nul`) do %%L
 
+REM AIDER_PY must be Aider's venv python (setup/install.py) -- never a random system
+REM python (e.g. a 3.14 on PATH without aider). Prefer batenv's value, then the known
+REM venv locations (%~dp0 is the install root; the venv lives under it).
+if defined AIDER_PY if not exist "%AIDER_PY%" set "AIDER_PY="
+if not defined AIDER_PY if exist "%~dp0VultureAI\aider\venv\Scripts\python.exe" set "AIDER_PY=%~dp0VultureAI\aider\venv\Scripts\python.exe"
+if not defined AIDER_PY if exist "%LOCALAPPDATA%\VultureAI\aider\venv\Scripts\python.exe" set "AIDER_PY=%LOCALAPPDATA%\VultureAI\aider\venv\Scripts\python.exe"
+
 set OLLAMA_API_BASE=http://127.0.0.1:%OLLAMA_PORT%
 
 REM Auto-tune: adjust num_ctx automatically to the current GPU (more VRAM = more context)
