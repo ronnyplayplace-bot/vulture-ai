@@ -249,17 +249,42 @@ def step_comfyui(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
     state["comfy_dir"] = comfy_dir
 
     # 1a. clone ComfyUI if missing
+    repo = spec.get("repo", "https://github.com/comfyanonymous/ComfyUI.git")
     if os.path.exists(os.path.join(comfy_dir, "main.py")):
         skip(f"ComfyUI already present: {comfy_dir}")
+    elif args.readonly:
+        info(f"(read-only) would clone ComfyUI into {comfy_dir}")
     else:
         if not shutil.which("git"):
             fail("git not found on PATH -- install Git for Windows first.")
             return
         parent = os.path.dirname(comfy_dir)
-        if not args.readonly:
-            os.makedirs(parent, exist_ok=True)
-        run(["git", "clone", spec.get("repo", "https://github.com/comfyanonymous/ComfyUI.git"),
-             comfy_dir], dry=args.readonly)
+        os.makedirs(parent, exist_ok=True)
+        if os.path.isdir(comfy_dir) and os.listdir(comfy_dir):
+            # Dir exists but has no main.py (an interrupted/re-run install left just
+            # custom_nodes etc.). A plain `git clone` into a non-empty dir fails hard
+            # (exit 128) and we must NOT proceed with a broken ComfyUI. Clone to a temp
+            # dir and merge the core in, preserving any already-installed custom_nodes.
+            info(f"ComfyUI dir exists but is incomplete -- fetching ComfyUI core into {comfy_dir}")
+            tmp = comfy_dir + ".tmp_clone"
+            shutil.rmtree(tmp, ignore_errors=True)
+            run(["git", "clone", repo, tmp])
+            for name in os.listdir(tmp):
+                src = os.path.join(tmp, name)
+                dst = os.path.join(comfy_dir, name)
+                if not os.path.exists(dst):
+                    shutil.move(src, dst)
+                elif name == "custom_nodes" and os.path.isdir(src):
+                    for sub in os.listdir(src):  # add ComfyUI's default nodes, keep ours
+                        d2 = os.path.join(dst, sub)
+                        if not os.path.exists(d2):
+                            shutil.move(os.path.join(src, sub), d2)
+            shutil.rmtree(tmp, ignore_errors=True)
+        else:
+            run(["git", "clone", repo, comfy_dir])
+        if not os.path.exists(os.path.join(comfy_dir, "main.py")):
+            fail(f"ComfyUI clone did not produce main.py in {comfy_dir} -- cannot continue.")
+            return
 
     # 1b. create venv next to ComfyUI (parent/venv) if missing
     venv_dir = os.path.join(os.path.dirname(comfy_dir), "venv")
