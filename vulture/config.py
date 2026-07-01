@@ -60,6 +60,8 @@ DEFAULTS: Dict[str, Any] = {
     "paths": {
         # Path values default to "" == unset -> filled by autodetect() or a
         # derived value at access time (e.g. comfy_models_dir = comfy_dir/models).
+        # User-chosen root folder for models + RAG (empty = auto / detected drive).
+        "install_base": "",
         "comfy_dir": "",
         "comfy_python": "",
         "comfy_models_dir": "",
@@ -453,9 +455,31 @@ class Config:
 
     # -- paths ------------------------------------------------------------ #
     @property
+    def install_base(self) -> str:
+        """User-chosen root folder that models (ComfyUI) and the code-RAG live
+        under.  Empty == unset: everything falls back to auto-detect /
+        ``%LOCALAPPDATA%`` exactly as before.  When set, :attr:`rag_base`,
+        :attr:`comfy_dir` (and its derived :attr:`output_dir`) and
+        :attr:`ollama_models_dir` derive from it."""
+        return _norm(self._p("install_base"))
+
+    def _data_root(self) -> str:
+        """The chosen :attr:`install_base` if set, else ``""`` (auto)."""
+        return self.install_base or ""
+
+    @property
     def comfy_dir(self) -> str:
-        """ComfyUI application folder (contains ``main.py``)."""
-        return _norm(self._p("comfy_dir"))
+        """ComfyUI application folder (contains ``main.py``).
+
+        Priority is unchanged -- an explicit ``config.json`` value, then an
+        auto-detected existing install (both arrive via ``paths.comfy_dir``).
+        Only when neither is found *and* an :attr:`install_base` was chosen does
+        it fall back to ``<install_base>/comfyui/ComfyUI`` (where the installer
+        places it)."""
+        v = self._p("comfy_dir")
+        if not v and self.install_base:
+            v = os.path.join(self.install_base, "comfyui", "ComfyUI")
+        return _norm(v)
 
     @property
     def comfy_python(self) -> str:
@@ -485,7 +509,8 @@ class Config:
 
     @property
     def output_dir(self) -> str:
-        """Generated-media output folder; derived from ``comfy_dir`` when unset."""
+        """Generated-media output folder; derived from ``comfy_dir`` when unset
+        (so it automatically follows :attr:`install_base` too)."""
         v = self._p("output_dir")
         if not v and self.comfy_dir:
             v = os.path.join(os.path.dirname(self.comfy_dir), "output")
@@ -527,7 +552,10 @@ class Config:
 
     @property
     def ollama_models_dir(self) -> str:
-        return _norm(self._p("ollama_models_dir"))
+        v = self._p("ollama_models_dir")
+        if not v and self.install_base:
+            v = os.path.join(self.install_base, "ollama", "models")
+        return _norm(v)
 
     @property
     def system_python(self) -> str:
@@ -547,21 +575,32 @@ class Config:
 
     # -- code-RAG (local, private semantic code search) ------------------- #
     @property
+    def rag_base(self) -> str:
+        """Base folder for the code-RAG's private data (embedded Qdrant store,
+        project registry, fastembed cache and venv).  Lives under the chosen
+        :attr:`install_base` (``<install_base>/VultureAI/rag``) when one is set,
+        otherwise the drive-agnostic :func:`_rag_base_dir` (``%LOCALAPPDATA%``)."""
+        base = self.install_base
+        if base:
+            return os.path.join(base, "VultureAI", "rag")
+        return _rag_base_dir()
+
+    @property
     def qdrant_path(self) -> str:
-        """Embedded-Qdrant store for the code-RAG; derived under the RAG base
-        folder when not set.  This is a local path, never a Qdrant server."""
+        """Embedded-Qdrant store for the code-RAG; derived under :attr:`rag_base`
+        when not set.  This is a local path, never a Qdrant server."""
         v = self._p("qdrant_path")
         if not v:
-            v = os.path.join(_rag_base_dir(), "qdrant")
+            v = os.path.join(self.rag_base, "qdrant")
         return _norm(v)
 
     @property
     def rag_data_dir(self) -> str:
-        """Folder for the RAG project registry; derived under the RAG base
-        folder when not set."""
+        """Folder for the RAG project registry; derived under :attr:`rag_base`
+        when not set."""
         v = self._p("rag_data_dir")
         if not v:
-            v = os.path.join(_rag_base_dir(), "data")
+            v = os.path.join(self.rag_base, "data")
         return _norm(v)
 
     @property
@@ -573,7 +612,7 @@ class Config:
     def rag_python(self) -> str:
         """Interpreter that runs the RAG server: its dedicated venv (created by
         ``setup/install.py``) when present, otherwise the system Python."""
-        base = _rag_base_dir()
+        base = self.rag_base
         candidates = [
             os.path.join(base, "venv", "Scripts", "python.exe"),  # Windows
             os.path.join(base, "venv", "bin", "python"),          # POSIX

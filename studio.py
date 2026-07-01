@@ -1215,6 +1215,26 @@ def _setup_load_models():
     if llms: groups.append(("LOCAL CHAT (LLM)",llms))
     return groups, from_manifest
 
+def _write_config_key(section, key, value):
+    """Merge ``{section: {key: value}}`` into config.json next to studio.py,
+    preserving every other key, and return the path written. Reads the existing
+    file if present (else starts from ``{}``) so the user's other overrides — and
+    anything setup/install.py wrote — are never clobbered. Writes valid JSON."""
+    cfg_path=os.path.join(_APPDIR,"config.json")
+    data={}
+    try:
+        with open(cfg_path,"r",encoding="utf-8") as f:
+            loaded=json.load(f)
+        if isinstance(loaded,dict): data=loaded
+    except Exception:
+        data={}
+    sec=data.get(section)
+    if not isinstance(sec,dict): sec={}
+    sec[key]=value; data[section]=sec
+    with open(cfg_path,"w",encoding="utf-8") as f:
+        json.dump(data,f,indent=2)
+    return cfg_path
+
 def open_setup_window():
     win=tk.Toplevel(root); win.title("Overlkd - Setup & install"); win.configure(bg=BG)
     win.geometry("720x760"); win.minsize(620,620); win.resizable(True,True)
@@ -1232,6 +1252,49 @@ def open_setup_window():
     hw_lbl.pack(side="left",fill="x",expand=True,padx=10,pady=8)
     redet=tk.Label(hwcard,text="↻ Re-detect",font=small_f,bg=CARD,fg=SUB,cursor="hand2")
     redet.pack(side="right",padx=10)
+
+    # --- A2) Install location (which drive/folder everything goes on) ---
+    loc_card=tk.Frame(win,bg=CARD); loc_card.pack(fill="x",padx=24,pady=(0,6))
+    tk.Label(loc_card,text="INSTALL LOCATION",font=small_f,bg=CARD,fg=ACCENT).pack(anchor="w",padx=10,pady=(8,0))
+    loc_root_lbl=tk.Label(loc_card,text="",font=sub_f,bg=CARD,fg=FG,anchor="w",wraplength=640,justify="left")
+    loc_root_lbl.pack(anchor="w",fill="x",padx=10,pady=(1,0))
+    loc_paths_lbl=tk.Label(loc_card,text="",font=small_f,bg=CARD,fg=SUB,anchor="w",wraplength=640,justify="left")
+    loc_paths_lbl.pack(anchor="w",fill="x",padx=10,pady=(1,0))
+    loc_status_lbl=tk.Label(loc_card,text="",font=small_f,bg=CARD,fg=GREEN,anchor="w",wraplength=640,justify="left")
+    loc_status_lbl.pack(anchor="w",fill="x",padx=10,pady=(1,0))
+    locrow=tk.Frame(loc_card,bg=CARD); locrow.pack(fill="x",padx=10,pady=(4,2))
+    choose_btn=tk.Button(locrow,text="📁  Choose folder…",font=sub_f,bg=ACCENT,fg="#ffffff",relief="flat",
+                         cursor="hand2",activebackground=ACCENT_DK,activeforeground="#ffffff")
+    choose_btn.pack(side="left")
+    tk.Label(loc_card,text="Pick a drive with ~100 GB free. Leave as Auto to use the default.",
+             font=small_f,bg=CARD,fg=SUB,anchor="w",wraplength=640,justify="left").pack(anchor="w",padx=10,pady=(2,8))
+
+    def _loc_render(root_dir):
+        # Update the read-out from a root path directly (no cfg reload needed).
+        # root_dir="" -> Auto: show the currently derived comfy_dir / qdrant_path.
+        if root_dir:
+            loc_root_lbl.config(text="Current: "+root_dir)
+            models_p=os.path.join(root_dir,"comfyui")
+            rag_p=os.path.join(root_dir,"VultureAI","rag")
+            loc_paths_lbl.config(text=f"Models → {models_p}   ·   RAG → {rag_p}")
+        else:
+            loc_root_lbl.config(text="Current: Auto (%LOCALAPPDATA% / detected drive)")
+            loc_paths_lbl.config(text=f"Models → {cfg.comfy_dir or '(installs on detected drive)'}"
+                                      f"   ·   RAG → {cfg.qdrant_path}")
+    def choose_location():
+        d=filedialog.askdirectory(title="Choose where to install models + RAG",
+                                  initialdir=cfg.install_base or _APPDIR)
+        if not d: return
+        d=os.path.normpath(d)
+        try:
+            _write_config_key("paths","install_base",d)
+            _loc_render(d)
+            loc_status_lbl.config(fg=GREEN,text="Saved. Models + RAG will install under: "
+                                                f"{d}  (applies to the install below).")
+        except Exception as e:
+            loc_status_lbl.config(fg=RED,text=f"Could not save location: {e}")
+    choose_btn.config(command=choose_location)
+    _loc_render(cfg.install_base)
 
     # --- B) Model list with hardware-scaled speed estimates ---
     groups,from_manifest=_setup_load_models()
@@ -1285,6 +1348,8 @@ def open_setup_window():
     check_btn=tk.Button(btnrow,text="🔍  Check what's missing",font=sub_f,bg=CARD,fg=ACCENT_LT,
                         relief="flat",cursor="hand2",activebackground=PANEL,activeforeground=FG)
     check_btn.pack(fill="x")
+    tk.Label(btnrow,text="Installs go to the location chosen above (Auto = default drive).",
+             font=small_f,bg=BG,fg=SUB,anchor="w",wraplength=660,justify="left").pack(fill="x",pady=(3,0))
 
     note_lbl=tk.Label(win,font=small_f,bg=BG,fg=SUB,wraplength=660,justify="left")
     if not have_installer:
