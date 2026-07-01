@@ -2,7 +2,7 @@
 # Laeuft bei jedem KI-Coder-Start -> GPU getauscht = automatisch mehr Kontext.
 import subprocess, os
 
-SETTINGS = r"C:\Users\User\.aider.model.settings.yml"
+SETTINGS = os.path.join(os.path.expanduser("~"), ".aider.model.settings.yml")
 
 def gpu_info():
     try:

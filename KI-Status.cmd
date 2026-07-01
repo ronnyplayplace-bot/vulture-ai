@@ -1,5 +1,11 @@
 @echo off
 title OVRLKD KI-Status (RAM / VRAM / GPU)
+
+REM Portable Pfade/Ports aus der Config laden (vulture\batenv.py) - einmalig vor der Schleife
+set "PYEXE=python"
+where python >nul 2>nul || set "PYEXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+for /f "usebackq delims=" %%L in (`"%PYEXE%" "%~dp0vulture\batenv.py" 2^>nul`) do %%L
+
 :loop
 cls
 echo ============================================================
@@ -24,12 +30,12 @@ echo.
 
 rem --- Ollama Modelle ---
 echo [Ollama - geladene Modelle]
-"C:\Users\User\AppData\Local\Programs\Ollama\ollama.exe" ps 2>nul
+"%OLLAMA_EXE%" ps 2>nul
 echo.
 
 rem --- Dienste ---
 echo [Dienste]
-for %%P in (8080 8188 8000 8001 11434) do (
+for %%P in (%WEBUI_PORT% %COMFY_PORT% %TUNNEL_PORT% %RAG_PORT% %OLLAMA_PORT%) do (
     netstat -ano 2>nul | find ":%%P " | find "LISTEN" >nul && echo   Port %%P: AKTIV || echo   Port %%P: aus
 )
 echo.

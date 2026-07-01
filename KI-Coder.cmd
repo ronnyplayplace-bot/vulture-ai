@@ -1,10 +1,16 @@
 @echo off
 setlocal enabledelayedexpansion
 title OVRLKD Coding-Agent (Aider)
-set OLLAMA_API_BASE=http://127.0.0.1:11434
+
+REM Portable Pfade/Ports aus der Config laden (vulture\batenv.py)
+set "PYEXE=python"
+where python >nul 2>nul || set "PYEXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+for /f "usebackq delims=" %%L in (`"%PYEXE%" "%~dp0vulture\batenv.py" 2^>nul`) do %%L
+
+set OLLAMA_API_BASE=http://127.0.0.1:%OLLAMA_PORT%
 
 REM Auto-Tune: num_ctx automatisch an die aktuelle GPU anpassen (mehr VRAM = mehr Kontext)
-"C:\Users\User\AppData\Local\Programs\Python\Python311\python.exe" "D:\OVRLKD-Studio\auto-tune-ctx.py"
+"%SYSTEM_PY%" "%~dp0auto-tune-ctx.py"
 
 cls
 echo ==========================================================
@@ -53,7 +59,7 @@ if not exist "!ORDNER!" (
 cd /d "!ORDNER!"
 
 REM Auto-Test/Lint-Repair-Loop pro Projekt einrichten (groesster Qualitaetshebel fuer lokale Modelle)
-"C:\Users\User\AppData\Local\Programs\Python\Python311\python.exe" "D:\OVRLKD-Studio\setup-project-coding.py" "!ORDNER!"
+"%SYSTEM_PY%" "%~dp0setup-project-coding.py" "!ORDNER!"
 
 echo.
 echo Ordner : !ORDNER!
@@ -61,7 +67,7 @@ echo Modell : !MODELL!
 echo Befehle: /help  /add datei  /run cmd  /architect  /exit
 echo ----------------------------------------------------------
 echo.
-"D:\ai-coder\venv\Scripts\python.exe" -m aider --model !MODELL!
+"%AIDER_PY%" -m aider --model !MODELL!
 echo.
 echo ==========================================================
 echo   Aider wurde beendet. Fenster bleibt offen.

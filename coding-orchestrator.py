@@ -6,8 +6,13 @@
 # Aufruf: python coding-orchestrator.py "<projektordner>" "<aufgabe>" [coder-modell] [planer-modell]
 import sys, os, json, subprocess, urllib.request, re
 
-OLLAMA = "http://127.0.0.1:11434"
-AIDER_PY = r"D:\ai-coder\venv\Scripts\python.exe"
+# Portable paths/ports from the shared config (auto-detect + config.json).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # find the vulture pkg
+from vulture.config import get_config
+cfg = get_config()
+
+OLLAMA = cfg.ollama_api                 # was "http://127.0.0.1:11434"
+AIDER_PY = cfg.aider_python             # was r"D:\ai-coder\venv\Scripts\python.exe"
 CODE_EXTS = (".html",".htm",".css",".js",".ts",".jsx",".tsx",".vue",".py",".json",".md",".svelte")
 
 def ollama_gen(model, system, prompt, num_ctx=8192, num_predict=1600):

@@ -380,7 +380,7 @@ def generate(engine, model_file, prompt, w, h, hires, on_status, on_image):
         on_status(f"Error: {e}")
 
 # ---------------- GUI ----------------
-root=tk.Tk(); root.title("OVRLKD Studio AI"); root.configure(bg=BG)
+root=tk.Tk(); root.title("Vulture AI"); root.configure(bg=BG)
 root.geometry("900x540+140+80"); root.minsize(820,500); root.resizable(True,True)
 
 # --- Dark-purple ttk.Combobox theming: field + readonly state + dropdown popup ---
@@ -479,12 +479,13 @@ def open_support_window():
     link=tk.Label(win,text=SUPPORT_URL,font=small_f,bg=BG,fg=SUB,cursor="hand2")
     link.pack(pady=(10,12)); link.bind("<Button-1>",lambda e:webbrowser.open(SUPPORT_URL))
 
-make_frameless(root, "OVRLKD STUDIO", root.destroy)
+make_frameless(root, "VULTURE AI", root.destroy)
 
 # ---- Kopfzeile ----
 head=tk.Frame(root,bg=BG); head.pack(fill="x",padx=24,pady=(16,6))
-tk.Label(head,text="OVRLKD STUDIO",font=title_f,bg=BG,fg=FG).pack(side="left")
-tk.Label(head,text="  your AI studio",font=sub_f,bg=BG,fg=ACCENT_LT).pack(side="left",pady=(10,0))
+tk.Label(head,text="VULTURE AI",font=title_f,bg=BG,fg=FG).pack(side="left")
+_by=tk.Label(head,text="  by OVRLKD Studio ↗",font=sub_f,bg=BG,fg=ACCENT_LT,cursor="hand2"); _by.pack(side="left",pady=(10,0))
+_by.bind("<Button-1>",lambda e:webbrowser.open("https://www.overlkd.com"))
 tk.Frame(root,bg=DIV,height=1).pack(fill="x",padx=24,pady=(0,2))
 
 # ---- Fusszeile: rotierender Slogan + dezenter Support-Link ----
@@ -564,7 +565,7 @@ def open_generator():
     win=tk.Toplevel(root); win.title("OVRLKD - Create images"); win.configure(bg=BG)
     win.geometry("760x860"); win.minsize(560,640); win.resizable(True,True)
     win.lift(); win.focus_force()
-    make_frameless(win, "OVRLKD - Create images", win.destroy)
+    make_frameless(win, "Vulture AI — Create images", win.destroy)
     win._last_path=None; win._pil=None
     tk.Label(win,text="\U0001f3a8 Create images",font=title_f,bg=BG,fg=FG).pack(pady=(14,8))
 
@@ -685,7 +686,7 @@ def open_3d_window():
         _open_cmd(os.path.join(cfg.tripo_dir, "1-Setup-3D-installieren.cmd")); return
     win=tk.Toplevel(root); win.title("OVRLKD - Image to 3D"); win.configure(bg=BG)
     win.geometry("560x640"); win.lift(); win.focus_force()
-    make_frameless(win, "OVRLKD - Image to 3D", win.destroy)
+    make_frameless(win, "Vulture AI — Image to 3D", win.destroy)
     win._img=None
     tk.Label(win,text="\U0001f9ca Image → 3D model",font=title_f,bg=BG,fg=FG).pack(pady=(14,4))
     tk.Label(win,text="Select image → options → create 3D (.obj for Mixamo/Meshy)",font=small_f,bg=BG,fg=SUB).pack(pady=(0,8))
@@ -749,7 +750,7 @@ def open_faceswap_window():
     from PIL import Image, ImageTk
     win=tk.Toplevel(root); win.title("OVRLKD - Face swap"); win.configure(bg=BG)
     win.geometry("640x760"); win.minsize(560,680); win.lift(); win.focus_force()
-    make_frameless(win, "OVRLKD - Face swap", win.destroy)
+    make_frameless(win, "Vulture AI — Face swap", win.destroy)
     win._src=None; win._tgt=None; win._last=None
     tk.Label(win,text="\U0001f3ad Face swap",font=title_f,bg=BG,fg=FG).pack(pady=(14,2))
     tk.Label(win,text="Your face (1) goes onto the target image (2). Runs 100% offline.",font=small_f,bg=BG,fg=SUB).pack(pady=(0,8))
@@ -820,7 +821,7 @@ def open_lipsync_window():
     from PIL import Image, ImageTk
     win=tk.Toplevel(root); win.title("OVRLKD - Lip sync"); win.configure(bg=BG)
     win.geometry("640x620"); win.minsize(560,560); win.lift(); win.focus_force()
-    make_frameless(win, "OVRLKD - Lip sync", win.destroy)
+    make_frameless(win, "Vulture AI — Lip sync", win.destroy)
     win._src=None; win._drv=None; win._last=None
     tk.Label(win,text="\U0001f444 Lip sync",font=title_f,bg=BG,fg=FG).pack(pady=(14,2))
     tk.Label(win,text="Photo (1) is brought to life by a driving video (2) - expressions, lips, head. Audio is carried over.",

@@ -291,6 +291,30 @@ def _detect_tripo(drives: List[str]) -> Dict[str, str]:
     return {}
 
 
+def _detect_aider_python(drives: List[str]) -> str:
+    """Locate the Python of an optional Aider coding-agent venv.
+
+    Mirrors the ``ai-coder\\venv`` layout the KI-Coder launcher expects; falls
+    back to a few common variants so a fresh clone finds it without editing
+    ``config.json``.
+    """
+    home = os.path.expanduser("~")
+    rel = [
+        r"ai-coder\venv\Scripts\python.exe",
+        r"ai-coder\.venv\Scripts\python.exe",
+        r"aider\venv\Scripts\python.exe",
+    ]
+    candidates: List[str] = []
+    for d in drives:
+        candidates += [os.path.join(d, r) for r in rel]
+    candidates += [
+        os.path.join(home, "ai-coder", "venv", "Scripts", "python.exe"),
+        # POSIX venvs (for completeness on non-Windows)
+        *[os.path.join(d, "ai-coder", "venv", "bin", "python") for d in drives],
+    ]
+    return _first_existing(candidates)
+
+
 def _detect_tools_dir(drives: List[str]) -> str:
     """Locate the optional ``ai-memory-tools`` folder (WebUI / Code-RAG launchers)."""
     home = os.path.expanduser("~")
@@ -331,6 +355,10 @@ def autodetect() -> Dict[str, Any]:
     sys_py = _detect_system_python()
     if sys_py:
         paths["system_python"] = sys_py
+
+    aider_py = _detect_aider_python(drives)
+    if aider_py:
+        paths["aider_python"] = aider_py
 
     tools = _detect_tools_dir(drives)
     if tools:
@@ -768,6 +796,7 @@ if __name__ == "__main__":
         ("ollama_exe", cfg.ollama_exe),
         ("ollama_models_dir", cfg.ollama_models_dir),
         ("system_python", cfg.system_python),
+        ("aider_python", cfg.aider_python),
         ("tripo_dir", cfg.tripo_dir),
         ("host", cfg.host),
         ("comfy_api", cfg.comfy_api),
