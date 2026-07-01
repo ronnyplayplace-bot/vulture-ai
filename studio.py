@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""OVRLKD Studio KI - Ein Fenster fuer alles, inkl. einfacher Bild-Generator."""
+"""OVRLKD Studio AI - One window for everything, incl. a simple image generator."""
 import tkinter as tk
 from tkinter import font as tkfont, ttk, messagebox, filedialog
 import subprocess, socket, os, threading, webbrowser, json, urllib.request, time, random, io
@@ -10,18 +10,29 @@ COMFY_PY = r"D:\comfyui\venv\Scripts\python.exe"
 COMFY_API = "http://127.0.0.1:8188"
 OUTPUT_DIR = r"D:\comfyui\output"
 
-BG="#0f1117"; CARD="#1a1d27"; ACCENT="#ff6b35"; FG="#e8e8ed"; SUB="#8a8f9c"; GREEN="#3ddc84"; RED="#ff4d4d"
+# ---- OVRLKD editorial dark-purple palette ----
+BG="#0a0a0a"; CARD="#1a1d27"; PANEL="#14141c"; DIV="#1c1c1c"
+ACCENT="#9b5dff"; ACCENT_LT="#c084fc"; ACCENT_DK="#5a3aef"
+FG="#f0f0f0"; SUB="#888888"; GREEN="#3ddc84"; RED="#ff4d4d"
 
-SERVICES = {"Ollama":11434, "Chat/Bilder (WebUI)":8080, "ComfyUI/FLUX":8188, "Code-RAG":8001, "VPS-Tunnel":8000}
+SLOGANS = ["We build things others overlook.",
+           "It sees everything - nothing leaves your machine.",
+           "Local . Private . Yours."]
+SUPPORT = [("BTC", "37W7Djk14P9kw3Gx3zWLNXpTyRcSJfrwSe"),
+           ("ETH", "0x30d7d100fe6606a0860786dacb975c7f7723852c"),
+           ("USDT (BEP20)", "0x30d7d100fe6606a0860786dacb975c7f7723852c")]
+SUPPORT_URL = "https://github.com/ronnyplayplace-bot/vulture-ai"
+
+SERVICES = {"Ollama":11434, "Chat/Images (WebUI)":8080, "ComfyUI/FLUX":8188, "Code-RAG":8001, "VPS-Tunnel":8000}
 
 NEG = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, worst quality, low quality, jpeg artifacts, signature, watermark, blurry, ugly, deformed, mutated"
 
 # Modell -> (engine, datei)  -- FLUX ist Standard (beste Qualitaet)
 MODELS = {
-    "FLUX  (beste Qualitaet)":       ("flux", "flux1-schnell-Q4_K_S.gguf"),
-    "DreamShaper  (schnell/Entwurf)":("sd15", "DreamShaper_v8.safetensors"),
-    "Realistic Vision  (Foto schnell)":("sd15","RealisticVision_v6.safetensors"),
-    "ToonYou  (Cartoon schnell)":    ("sd15", "ToonYou_v6.safetensors"),
+    "FLUX  (best quality)":            ("flux", "flux1-schnell-Q4_K_S.gguf"),
+    "DreamShaper  (fast/draft)":       ("sd15", "DreamShaper_v8.safetensors"),
+    "Realistic Vision  (photo, fast)": ("sd15","RealisticVision_v6.safetensors"),
+    "ToonYou  (cartoon, fast)":        ("sd15", "ToonYou_v6.safetensors"),
 }
 # Zusatz fuer Charakter-Modus (3D/Rigging): A-Pose, ganzer Koerper, gerade
 CHAR_SUFFIX = (", full body character, standing straight in A-pose, arms slightly "
@@ -29,10 +40,10 @@ CHAR_SUFFIX = (", full body character, standing straight in A-pose, arms slightl
     "character reference sheet, plain solid grey background, even lighting, T-pose")
 # (Basis-Aufloesung, Hi-Res-Faktor) -> Endergebnis ist Basis * Faktor
 SIZES = {
-    "Quadrat HD (1024x1024)":   (512,512,2.0),
-    "Hochkant HD (1024x1536)":  (512,768,2.0),
-    "Quer HD (1536x1024)":      (768,512,2.0),
-    "Quadrat schnell (512)":    (512,512,1.0),
+    "Square HD (1024x1024)":    (512,512,2.0),
+    "Portrait HD (1024x1536)":  (512,768,2.0),
+    "Landscape HD (1536x1024)": (768,512,2.0),
+    "Square fast (512)":        (512,512,1.0),
 }
 
 def port_open(p):
@@ -130,7 +141,7 @@ def wf_img2img(infile, prompt, ckpt, denoise, seed):
 def run_img2img(src_path, prompt, denoise, on_status, on_image):
     import shutil
     try:
-        if not src_path or not os.path.exists(src_path): on_status("Kein Quellbild."); return
+        if not src_path or not os.path.exists(src_path): on_status("No source image."); return
         ensure_comfy()
         for _ in range(60):
             if port_open(8188): break
@@ -139,11 +150,11 @@ def run_img2img(src_path, prompt, denoise, on_status, on_image):
         fn="to_img2img.png"; shutil.copy(src_path, os.path.join(inp,fn))
         seed=random.randint(0,2**31)
         wf=wf_img2img(fn, prompt or "high quality, detailed", "RealisticVision_v6.safetensors", denoise, seed)
-        path=comfy_run(wf, on_status, "Bild→Bild")
-        if path: on_status("Bild→Bild fertig!"); on_image(path)
-        else: on_status("Bild→Bild fehlgeschlagen.")
+        path=comfy_run(wf, on_status, "Image→Image")
+        if path: on_status("Image→Image done!"); on_image(path)
+        else: on_status("Image→Image failed.")
     except Exception as e:
-        on_status(f"Bild→Bild Fehler: {e}")
+        on_status(f"Image→Image error: {e}")
 
 def wf_upscale(infile, scale, ckpt, seed):
     # 4x-UltraSharp + Ultimate SD Upscale (SD1.5 refine, tiled) -> echtes 4K-Detail auf 6GB
@@ -167,7 +178,7 @@ def run_upscale(src_path, scale, on_status, on_image):
     import shutil
     try:
         if not src_path or not os.path.exists(src_path):
-            on_status("Kein Bild zum Hochskalieren."); return
+            on_status("No image to upscale."); return
         ensure_comfy()
         for _ in range(60):
             if port_open(8188): break
@@ -177,11 +188,11 @@ def run_upscale(src_path, scale, on_status, on_image):
         fn="to_upscale.png"; shutil.copy(src_path, os.path.join(inp,fn))
         seed=random.randint(0,2**31)
         wf=wf_upscale(fn, scale, "RealisticVision_v6.safetensors", seed)
-        path=comfy_run(wf, on_status, f"Skaliere {int(scale)}x hoch")
-        if path: on_status("Hochskaliert fertig!"); on_image(path)
-        else: on_status("Laeuft evtl. noch in ComfyUI - schau im Bilder-Ordner (kann auf 6GB lange dauern).")
+        path=comfy_run(wf, on_status, f"Upscaling {int(scale)}x")
+        if path: on_status("Upscale done!"); on_image(path)
+        else: on_status("May still be running in ComfyUI - check the images folder (can take a while on 6GB).")
     except Exception as e:
-        on_status(f"Upscale-Fehler: {e}")
+        on_status(f"Upscale error: {e}")
 
 def wf_faceswap(target_file, source_file, restore_model="codeformer.pth", visibility=1.0):
     # ReActor Face-Swap: Gesicht aus source_file -> auf target_file. Laeuft offline (inswapper_128 + buffalo_l).
@@ -204,8 +215,8 @@ SWAP_RESTORE = {"none":("none",0.0), "light":("codeformer.pth",0.5), "strong":("
 def run_faceswap(target_path, source_path, restore_key, on_status, on_image):
     import shutil
     try:
-        if not source_path or not os.path.exists(source_path): on_status("Kein Gesicht-Bild gewaehlt."); return
-        if not target_path or not os.path.exists(target_path): on_status("Kein Ziel-Bild gewaehlt."); return
+        if not source_path or not os.path.exists(source_path): on_status("No face image selected."); return
+        if not target_path or not os.path.exists(target_path): on_status("No target image selected."); return
         ensure_comfy()
         for _ in range(60):
             if port_open(8188): break
@@ -216,11 +227,11 @@ def run_faceswap(target_path, source_path, restore_key, on_status, on_image):
         shutil.copy(target_path, os.path.join(inp,tn)); shutil.copy(source_path, os.path.join(inp,sn))
         model,vis=SWAP_RESTORE.get(restore_key,("codeformer.pth",1.0))
         wf=wf_faceswap(tn, sn, model, vis)
-        path=comfy_run(wf, on_status, "Gesicht tauschen")
-        if path: on_status("Gesicht getauscht!"); on_image(path)
-        else: on_status("Laeuft evtl. noch in ComfyUI - schau im Bilder-Ordner.")
+        path=comfy_run(wf, on_status, "Face swap")
+        if path: on_status("Face swapped!"); on_image(path)
+        else: on_status("May still be running in ComfyUI - check the images folder.")
     except Exception as e:
-        on_status(f"Face-Swap Fehler: {e}")
+        on_status(f"Face swap error: {e}")
 
 def wf_lipsync(source_file, driving_file, expressiveness=1.0):
     # LivePortrait: Mimik/Lippen aus driving_file (Video) -> auf source_file (Foto). Ton wird durchgeschleift.
@@ -240,15 +251,15 @@ def wf_lipsync(source_file, driving_file, expressiveness=1.0):
                      "format":"video/h264-mp4","pingpong":False,"save_output":True,"audio":["4",2]},"class_type":"VHS_VideoCombine"},
     }
 
-def comfy_run_video(wf, on_status, label="Lippen-Sync"):
+def comfy_run_video(wf, on_status, label="Lip sync"):
     # wie comfy_run, aber holt am Ende eine Video-Datei (gifs/videos) aus der History
     cid=str(random.randint(1,2**31))
     try:
         pid=json.loads(urllib.request.urlopen(urllib.request.Request(f"{COMFY_API}/prompt",
             data=json.dumps({"prompt":wf,"client_id":cid}).encode(),headers={"Content-Type":"application/json"}),timeout=30).read())["prompt_id"]
     except urllib.error.HTTPError as e:
-        on_status("Fehler beim Senden: "+e.read().decode()[:200]); return None
-    on_status(f"{label} laeuft... (auf 1060 langsam)")
+        on_status("Send error: "+e.read().decode()[:200]); return None
+    on_status(f"{label} running... (slow on 1060)")
     t0=time.time()
     while time.time()-t0<1800:
         time.sleep(4)
@@ -257,7 +268,7 @@ def comfy_run_video(wf, on_status, label="Lippen-Sync"):
         except: continue
         if pid not in h: continue
         st=h[pid].get("status",{})
-        if st.get("status_str")=="error": on_status("Fehler in der Verarbeitung (Log pruefen)."); return None
+        if st.get("status_str")=="error": on_status("Processing error (check log)."); return None
         if st.get("completed") or st.get("status_str")=="success":
             for n,o in h[pid].get("outputs",{}).items():
                 for g in o.get("gifs",[])+o.get("videos",[]):
@@ -268,8 +279,8 @@ def comfy_run_video(wf, on_status, label="Lippen-Sync"):
 def run_lipsync(source_path, driving_path, expressiveness, on_status, on_done):
     import shutil
     try:
-        if not source_path or not os.path.exists(source_path): on_status("Kein Foto gewaehlt."); return
-        if not driving_path or not os.path.exists(driving_path): on_status("Kein Treiber-Video gewaehlt."); return
+        if not source_path or not os.path.exists(source_path): on_status("No photo selected."); return
+        if not driving_path or not os.path.exists(driving_path): on_status("No driving video selected."); return
         ensure_comfy()
         for _ in range(60):
             if port_open(8188): break
@@ -279,11 +290,11 @@ def run_lipsync(source_path, driving_path, expressiveness, on_status, on_done):
         sn="lp_src"+se; dn="lp_drive.mp4"
         shutil.copy(source_path, os.path.join(inp,sn)); shutil.copy(driving_path, os.path.join(inp,dn))
         wf=wf_lipsync(sn, dn, expressiveness)
-        path=comfy_run_video(wf, on_status, "Lippen-Sync")
-        if path: on_status("Lippen-Sync fertig!"); on_done(path)
-        else: on_status("Laeuft evtl. noch in ComfyUI - schau im Bilder-Ordner.")
+        path=comfy_run_video(wf, on_status, "Lip sync")
+        if path: on_status("Lip sync done!"); on_done(path)
+        else: on_status("May still be running in ComfyUI - check the images folder.")
     except Exception as e:
-        on_status(f"Lip-Sync Fehler: {e}")
+        on_status(f"Lip sync error: {e}")
 
 def enhance_prompt(user_text):
     # Lokale KI (qwen) macht aus lockerem/deutschem Text einen guten englischen FLUX-Prompt
@@ -301,7 +312,7 @@ def enhance_prompt(user_text):
     out=_re.sub(r"<think>.*?</think>","",out,flags=_re.DOTALL).strip().strip('"').strip()
     return out
 
-def comfy_run(wf, on_status, label="Generiere"):
+def comfy_run(wf, on_status, label="Generating"):
     # Sendet Workflow + zeigt LIVE-Prozent via Websocket, gibt Bildpfad zurueck
     import websocket as _ws
     cid=str(random.randint(1,2**31))
@@ -343,7 +354,7 @@ def comfy_run(wf, on_status, label="Generiere"):
 
 def generate(engine, model_file, prompt, w, h, hires, on_status, on_image):
     try:
-        on_status("Starte ComfyUI..." if not port_open(8188) else "Sende an KI...")
+        on_status("Starting ComfyUI..." if not port_open(8188) else "Sending to AI...")
         if not ensure_comfy():
             for _ in range(60):
                 if port_open(8188): break
@@ -356,19 +367,37 @@ def generate(engine, model_file, prompt, w, h, hires, on_status, on_image):
                   r"D:\comfyui\ComfyUI\models\text_encoders\clip_l.safetensors",
                   r"D:\comfyui\ComfyUI\models\vae\flux_ae.safetensors"]
             if not all(os.path.exists(p) and os.path.getsize(p)>1000000 for p in need):
-                on_status("FLUX laedt noch herunter - bitte spaeter."); return
+                on_status("FLUX still downloading - please try later."); return
         seed=random.randint(0,2**31)
         wf = wf_flux(prompt,w,h,seed) if engine=="flux" else wf_sd15(model_file,prompt,w,h,seed,hires)
-        lbl="Generiere FLUX" if engine=="flux" else "Generiere"
+        lbl="Generating FLUX" if engine=="flux" else "Generating"
         path=comfy_run(wf, on_status, lbl)
-        if path: on_status("Fertig!"); on_image(path)
-        else: on_status("Timeout - laeuft evtl. noch, schau im Bilder-Ordner.")
+        if path: on_status("Done!"); on_image(path)
+        else: on_status("Timeout - may still be running, check the images folder.")
     except Exception as e:
-        on_status(f"Fehler: {e}")
+        on_status(f"Error: {e}")
 
 # ---------------- GUI ----------------
-root=tk.Tk(); root.title("OVRLKD Studio KI"); root.configure(bg=BG)
+root=tk.Tk(); root.title("OVRLKD Studio AI"); root.configure(bg=BG)
 root.geometry("900x540+140+80"); root.minsize(820,500); root.resizable(True,True)
+
+# --- Dark-purple ttk.Combobox theming: field + readonly state + dropdown popup ---
+_cbstyle=ttk.Style(); _cbstyle.theme_use("default")
+_cbstyle.configure("TCombobox",fieldbackground=CARD,background=CARD,foreground=FG,
+                   arrowcolor=ACCENT_LT,relief="flat",borderwidth=0,padding=6)
+_cbstyle.map("TCombobox",
+    fieldbackground=[("readonly",CARD),("disabled",PANEL)],
+    foreground=[("readonly",FG),("disabled",SUB)],
+    background=[("readonly",CARD)],
+    selectbackground=[("readonly",CARD)],
+    selectforeground=[("readonly",FG)],
+    arrowcolor=[("readonly",ACCENT_LT)])
+# The dropdown popup is a classic Tk Listbox that ignores ttk styling:
+root.option_add("*TCombobox*Listbox.background",CARD)
+root.option_add("*TCombobox*Listbox.foreground",FG)
+root.option_add("*TCombobox*Listbox.selectBackground",ACCENT)
+root.option_add("*TCombobox*Listbox.selectForeground","#0a0a0a")
+root.option_add("*TCombobox*Listbox.borderWidth",0)
 def _front():
     root.deiconify(); root.lift(); root.attributes("-topmost",True)
     root.after(800,lambda:root.attributes("-topmost",False)); root.focus_force()
@@ -377,11 +406,94 @@ root.after(100,_front)
 title_f=tkfont.Font(family="Segoe UI",size=20,weight="bold")
 btn_f=tkfont.Font(family="Segoe UI",size=13,weight="bold")
 sub_f=tkfont.Font(family="Segoe UI",size=9); small_f=tkfont.Font(family="Segoe UI",size=9)
+bar_f=tkfont.Font(family="Segoe UI",size=10,weight="bold")
+
+# ---- Frameless custom chrome: eigene, flache Titelleiste (kein natives Fenster-Chrome) ----
+def make_frameless(win, title, closer):
+    win.configure(bg=BG)
+    win.overrideredirect(True)
+    try: win.attributes("-topmost", False)
+    except: pass
+    win.configure(highlightthickness=1, highlightbackground=ACCENT_DK, highlightcolor=ACCENT_DK)
+    st={"maxed": False, "geo": None, "min": False}
+    def do_min():
+        # overrideredirect-Fenster lassen sich nicht direkt iconifizieren -> Rahmen kurz an, iconify, beim Remap wieder aus
+        st["min"]=True
+        win.overrideredirect(False); win.update_idletasks(); win.iconify()
+    def _remap(e=None):
+        try:
+            if st["min"] and win.state()=="normal":
+                win.overrideredirect(True); st["min"]=False
+        except: pass
+    win.bind("<Map>", _remap, add="+")
+    def do_max():
+        if st["maxed"]:
+            if st["geo"]: win.geometry(st["geo"])
+            st["maxed"]=False; mx.config(text="□")
+        else:
+            st["geo"]=win.geometry()
+            win.geometry(f"{win.winfo_screenwidth()}x{win.winfo_screenheight()}+0+0")
+            st["maxed"]=True; mx.config(text="❐")
+    bar=tk.Frame(win,bg=PANEL,height=36); bar.pack(side="top",fill="x"); bar.pack_propagate(False)
+    tlbl=tk.Label(bar,text=title,font=bar_f,bg=PANEL,fg=FG); tlbl.pack(side="left",padx=14)
+    def _wb(sym,cmd,hovbg):
+        b=tk.Label(bar,text=sym,font=("Segoe UI",12),bg=PANEL,fg=SUB,width=5,cursor="hand2")
+        b.pack(side="right",fill="y")
+        b.bind("<Button-1>",lambda e:cmd())
+        b.bind("<Enter>",lambda e,bb=b:bb.config(bg=hovbg,fg="#ffffff"))
+        b.bind("<Leave>",lambda e,bb=b:bb.config(bg=PANEL,fg=SUB))
+        return b
+    _wb("✕", closer, RED)
+    mx=_wb("□", do_max, ACCENT)
+    _wb("⚊", do_min, ACCENT)
+    def _press(e): win._drag=(e.x_root, e.y_root, win.winfo_x(), win.winfo_y())
+    def _move(e):
+        if st["maxed"] or not hasattr(win,"_drag"): return
+        x0,y0,wx,wy=win._drag
+        win.geometry(f"+{wx+(e.x_root-x0)}+{wy+(e.y_root-y0)}")
+    for wdg in (bar, tlbl):
+        wdg.bind("<ButtonPress-1>", _press); wdg.bind("<B1-Motion>", _move)
+    return bar
+
+# ---- Dezenter Support-Dialog (Krypto-Adressen kopieren) ----
+def open_support_window():
+    win=tk.Toplevel(root); win.title("OVRLKD - Support"); win.geometry("440x400")
+    win.lift(); win.focus_force()
+    make_frameless(win, "♥  Support", win.destroy)
+    tk.Label(win,text="Support keeps it free & offline.",font=sub_f,bg=BG,fg=ACCENT_LT).pack(pady=(16,4))
+    tk.Label(win,text="Copy an address to send a tip - thank you.",font=small_f,bg=BG,fg=SUB).pack(pady=(0,10))
+    def copy(val,btn):
+        win.clipboard_clear(); win.clipboard_append(val)
+        btn.config(text="copied ✓")
+        win.after(1200,lambda:btn.config(text="copy"))
+    for label,addr in SUPPORT:
+        card=tk.Frame(win,bg=CARD); card.pack(fill="x",padx=20,pady=4)
+        tk.Label(card,text=label,font=("Segoe UI",9,"bold"),bg=CARD,fg=ACCENT_LT).pack(anchor="w",padx=10,pady=(8,0))
+        rowf=tk.Frame(card,bg=CARD); rowf.pack(fill="x",padx=10,pady=(0,8))
+        tk.Label(rowf,text=addr,font=("Consolas",8),bg=CARD,fg=FG,anchor="w").pack(side="left",fill="x",expand=True)
+        cbtn=tk.Button(rowf,text="copy",font=small_f,bg=ACCENT,fg="#ffffff",relief="flat",cursor="hand2",
+                       activebackground=ACCENT_DK,activeforeground="#ffffff")
+        cbtn.config(command=lambda a=addr,b=cbtn:copy(a,b)); cbtn.pack(side="right",padx=(8,0))
+    link=tk.Label(win,text=SUPPORT_URL,font=small_f,bg=BG,fg=SUB,cursor="hand2")
+    link.pack(pady=(10,12)); link.bind("<Button-1>",lambda e:webbrowser.open(SUPPORT_URL))
+
+make_frameless(root, "OVRLKD STUDIO", root.destroy)
 
 # ---- Kopfzeile ----
 head=tk.Frame(root,bg=BG); head.pack(fill="x",padx=24,pady=(16,6))
-tk.Label(head,text="OVRLKD STUDIO KI",font=title_f,bg=BG,fg=FG).pack(side="left")
-tk.Label(head,text="  dein KI-Studio",font=sub_f,bg=BG,fg=SUB).pack(side="left",pady=(10,0))
+tk.Label(head,text="OVRLKD STUDIO",font=title_f,bg=BG,fg=FG).pack(side="left")
+tk.Label(head,text="  your AI studio",font=sub_f,bg=BG,fg=ACCENT_LT).pack(side="left",pady=(10,0))
+tk.Frame(root,bg=DIV,height=1).pack(fill="x",padx=24,pady=(0,2))
+
+# ---- Fusszeile: rotierender Slogan + dezenter Support-Link ----
+foot=tk.Frame(root,bg=BG); foot.pack(side="bottom",fill="x",padx=24,pady=(0,8))
+slogan_lbl=tk.Label(foot,text=SLOGANS[0],font=small_f,bg=BG,fg=SUB); slogan_lbl.pack(side="left")
+sup_lbl=tk.Label(foot,text="♥ Support",font=small_f,bg=BG,fg=ACCENT_LT,cursor="hand2"); sup_lbl.pack(side="right")
+sup_lbl.bind("<Button-1>",lambda e:open_support_window())
+def _rotate_slogan(i=0):
+    slogan_lbl.config(text=SLOGANS[i % len(SLOGANS)])
+    root.after(6000, lambda:_rotate_slogan(i+1))
+root.after(6000,_rotate_slogan)
 
 # ---- Koerper: links Aktionen (Raster), rechts Status ----
 body=tk.Frame(root,bg=BG); body.pack(fill="both",expand=True,padx=20,pady=(4,16))
@@ -389,7 +501,7 @@ left=tk.Frame(body,bg=BG); left.pack(side="left",fill="both",expand=True)
 right=tk.Frame(body,bg=BG,width=210); right.pack(side="right",fill="y",padx=(16,0)); right.pack_propagate(False)
 
 def _hover(fr,on,base):
-    c="#252a36" if on else base
+    c="#26233a" if on else base
     fr.config(bg=c)
     for w in fr.winfo_children():
         w.config(bg=c)
@@ -411,18 +523,18 @@ for i in range(2): left.columnconfigure(i,weight=1)
 for i in range(5): left.rowconfigure(i,weight=1)
 
 # Start ueber volle Breite
-make_card(left,0,0,"▶","ALLES STARTEN","Dienste hochfahren",start_all,base=ACCENT,fg="#1a0e08").grid(columnspan=2,sticky="nsew")
-make_card(left,1,0,"\U0001f3a8","Bilder erstellen","Text rein, Bild raus",lambda:open_generator())
-make_card(left,1,1,"\U0001f4ac","Chat","Lokale KI-Modelle",start_webui_and_open)
-make_card(left,2,0,"\U0001f4bb","Coding-Agent","Aider (Terminal)",open_coder)
-make_card(left,2,1,"\U0001f9ca","Bild → 3D","Foto -> 3D-Modell",lambda:open_3d_window())
-make_card(left,3,0,"\U0001f3c3","Riggen/Animieren","Mixamo (Browser)",lambda:webbrowser.open("https://www.mixamo.com"))
+make_card(left,0,0,"▶","START ALL","Boot up services",start_all,base=ACCENT,fg="#ffffff").grid(columnspan=2,sticky="nsew")
+make_card(left,1,0,"\U0001f3a8","Create images","Text in, image out",lambda:open_generator())
+make_card(left,1,1,"\U0001f4ac","Chat","Local AI models",start_webui_and_open)
+make_card(left,2,0,"\U0001f4bb","Coding agent","Aider (terminal)",open_coder)
+make_card(left,2,1,"\U0001f9ca","Image → 3D","Photo -> 3D model",lambda:open_3d_window())
+make_card(left,3,0,"\U0001f3c3","Rig/Animate","Mixamo (browser)",lambda:webbrowser.open("https://www.mixamo.com"))
 make_card(left,3,1,"\U0001f4ca","Status","RAM / VRAM / GPU",open_status)
-make_card(left,4,0,"\U0001f3ad","Gesicht tauschen","Face-Swap (Foto)",lambda:open_faceswap_window())
-make_card(left,4,1,"\U0001f444","Lippen-Sync","Foto zum Leben erwecken",lambda:open_lipsync_window())
+make_card(left,4,0,"\U0001f3ad","Face swap","Face swap (photo)",lambda:open_faceswap_window())
+make_card(left,4,1,"\U0001f444","Lip sync","Bring a photo to life",lambda:open_lipsync_window())
 
 # ---- Rechte Spalte: Dienste-Status + Speicher/Stop ----
-tk.Label(right,text="DIENSTE",font=small_f,bg=BG,fg=SUB).pack(anchor="w",pady=(2,4))
+tk.Label(right,text="SERVICES",font=small_f,bg=BG,fg=SUB).pack(anchor="w",pady=(2,4))
 status_labels={}
 for name in SERVICES:
     row=tk.Frame(right,bg=BG); row.pack(fill="x",pady=1)
@@ -432,10 +544,10 @@ for name in SERVICES:
 
 tk.Frame(right,bg=BG,height=12).pack()
 free_f=tk.Frame(right,bg="#16241c",cursor="hand2"); free_f.pack(fill="x",pady=4)
-tk.Label(free_f,text="\U0001f9f9  Speicher freigeben",font=sub_f,bg="#16241c",fg=GREEN).pack(pady=10)
+tk.Label(free_f,text="\U0001f9f9  Free memory",font=sub_f,bg="#16241c",fg=GREEN).pack(pady=10)
 for w in [free_f]+list(free_f.winfo_children()): w.bind("<Button-1>",lambda e:free_memory())
 stop_f=tk.Frame(right,bg="#2a1518",cursor="hand2"); stop_f.pack(fill="x",pady=4)
-tk.Label(stop_f,text="⏹  Alles stoppen",font=sub_f,bg="#2a1518",fg=RED).pack(pady=10)
+tk.Label(stop_f,text="⏹  Stop all",font=sub_f,bg="#2a1518",fg=RED).pack(pady=10)
 for w in [stop_f]+list(stop_f.winfo_children()): w.bind("<Button-1>",lambda e:stop_all())
 
 def refresh():
@@ -447,83 +559,84 @@ refresh()
 # ---------- Bild-Generator Fenster ----------
 def open_generator():
     from PIL import Image, ImageTk
-    win=tk.Toplevel(root); win.title("OVRLKD - Bilder erstellen"); win.configure(bg=BG)
+    win=tk.Toplevel(root); win.title("OVRLKD - Create images"); win.configure(bg=BG)
     win.geometry("760x860"); win.minsize(560,640); win.resizable(True,True)
     win.lift(); win.focus_force()
+    make_frameless(win, "OVRLKD - Create images", win.destroy)
     win._last_path=None; win._pil=None
-    tk.Label(win,text="\U0001f3a8 Bilder erstellen",font=title_f,bg=BG,fg=FG).pack(pady=(14,8))
+    tk.Label(win,text="\U0001f3a8 Create images",font=title_f,bg=BG,fg=FG).pack(pady=(14,8))
 
-    tk.Label(win,text="Was soll auf dem Bild sein?",font=sub_f,bg=BG,fg=SUB).pack(anchor="w",padx=24)
+    tk.Label(win,text="What should be in the image?",font=sub_f,bg=BG,fg=SUB).pack(anchor="w",padx=24)
     prompt_box=tk.Text(win,height=3,font=("Segoe UI",11),bg=CARD,fg=FG,insertbackground=FG,relief="flat",wrap="word")
     prompt_box.pack(fill="x",padx=24,pady=(2,10)); prompt_box.insert("1.0","")
 
     rowf=tk.Frame(win,bg=BG); rowf.pack(fill="x",padx=24)
-    tk.Label(rowf,text="Modell / Stil",font=sub_f,bg=BG,fg=SUB).grid(row=0,column=0,sticky="w")
+    tk.Label(rowf,text="Model / Style",font=sub_f,bg=BG,fg=SUB).grid(row=0,column=0,sticky="w")
     tk.Label(rowf,text="Format",font=sub_f,bg=BG,fg=SUB).grid(row=0,column=1,sticky="w",padx=(12,0))
     model_var=tk.StringVar(value=list(MODELS.keys())[0])
     size_var=tk.StringVar(value=list(SIZES.keys())[0])
     style=ttk.Style(); style.theme_use("default")
-    style.configure("TCombobox",fieldbackground=CARD,background=CARD,foreground=FG,arrowcolor=FG)
+    style.configure("TCombobox",fieldbackground=CARD,background=CARD,foreground=FG,arrowcolor=ACCENT_LT,relief="flat")
     mcb=ttk.Combobox(rowf,textvariable=model_var,values=list(MODELS.keys()),state="readonly",width=28); mcb.grid(row=1,column=0,sticky="w",pady=4)
     scb=ttk.Combobox(rowf,textvariable=size_var,values=list(SIZES.keys()),state="readonly",width=16); scb.grid(row=1,column=1,sticky="w",padx=(12,0),pady=4)
 
     enhance_var=tk.BooleanVar(value=True)
-    tk.Checkbutton(win,text="✨ Prompt von KI optimieren (deutsch/locker ok → macht englischen FLUX-Prompt)",
+    tk.Checkbutton(win,text="✨ Optimize prompt with AI (casual text ok → produces an English FLUX prompt)",
         variable=enhance_var,font=sub_f,bg=BG,fg=FG,selectcolor=CARD,activebackground=BG,activeforeground=FG,anchor="w").pack(fill="x",padx=24,pady=(2,0))
     char_var=tk.BooleanVar(value=False)
-    cb=tk.Checkbutton(win,text="\U0001f9cd  Charakter für 3D/Rigging (A-Pose, ganzer Körper, von vorn)",
+    cb=tk.Checkbutton(win,text="\U0001f9cd  Character for 3D/rigging (A-pose, full body, front view)",
         variable=char_var,font=sub_f,bg=BG,fg=FG,selectcolor=CARD,activebackground=BG,activeforeground=FG,anchor="w")
     cb.pack(fill="x",padx=24,pady=(2,0))
 
     # Buttons ZUERST (immer sichtbar, oben), dann Bild fuellt den Rest
-    gen_btn=tk.Button(win,text="✨  Bild generieren",font=btn_f,bg=ACCENT,fg="#1a0e08",relief="flat",cursor="hand2")
+    gen_btn=tk.Button(win,text="✨  Generate image",font=btn_f,bg=ACCENT,fg="#ffffff",relief="flat",cursor="hand2",activebackground=ACCENT_DK,activeforeground="#ffffff")
     gen_btn.pack(side="top",fill="x",padx=24,pady=(10,4))
-    status_lbl=tk.Label(win,text="Bereit.",font=sub_f,bg=BG,fg=GREEN); status_lbl.pack(side="top",pady=(2,4))
+    status_lbl=tk.Label(win,text="Ready.",font=sub_f,bg=BG,fg=GREEN); status_lbl.pack(side="top",pady=(2,4))
 
     # Unten: Bild gross oeffnen + Ordner
     botf=tk.Frame(win,bg=BG); botf.pack(side="bottom",fill="x",pady=(4,10))
     def open_full():
         if win._last_path and os.path.exists(win._last_path): os.startfile(win._last_path)
         else: os.startfile(OUTPUT_DIR)
-    tk.Button(botf,text="\U0001f50d  Bild gross oeffnen",font=sub_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",
+    tk.Button(botf,text="\U0001f50d  Open image large",font=sub_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",
               command=open_full).pack(side="left",expand=True,fill="x",padx=(24,6))
-    tk.Button(botf,text="\U0001f4c1 Ordner",font=sub_f,bg=CARD,fg=SUB,relief="flat",cursor="hand2",
+    tk.Button(botf,text="\U0001f4c1 Folder",font=sub_f,bg=CARD,fg=SUB,relief="flat",cursor="hand2",
               command=lambda:os.startfile(OUTPUT_DIR)).pack(side="left",expand=True,fill="x",padx=(6,24))
     # Bild->Bild Reihe (Variation/Umgestaltung aus Quellbild + Prompt)
     i2f=tk.Frame(win,bg=BG); i2f.pack(side="bottom",fill="x",pady=(0,2))
     def do_img2img():
-        f=filedialog.askopenfilename(title="Quellbild fuer Bild→Bild",initialdir=OUTPUT_DIR,
-            filetypes=[("Bilder","*.png *.jpg *.jpeg *.webp"),("Alle","*.*")])
+        f=filedialog.askopenfilename(title="Source image for Image→Image",initialdir=OUTPUT_DIR,
+            filetypes=[("Images","*.png *.jpg *.jpeg *.webp"),("All","*.*")])
         if not f: return
         p=prompt_box.get("1.0","end").strip() or "high quality, detailed"
-        set_status("Bild→Bild laeuft...")
+        set_status("Image→Image running...")
         threading.Thread(target=lambda:run_img2img(f,p,0.55,set_status,show_image),daemon=True).start()
-    tk.Button(i2f,text="\U0001f5bc️ Bild→Bild (Quellbild + Prompt umgestalten)",font=sub_f,bg="#2a2418",fg="#ffb86b",
+    tk.Button(i2f,text="\U0001f5bc️ Image→Image (reshape source + prompt)",font=sub_f,bg="#1e1a2e",fg=ACCENT_LT,
               relief="flat",cursor="hand2",command=do_img2img).pack(fill="x",padx=24)
     # Upscale-Reihe (4x-UltraSharp + Ultimate SD Upscale -> echtes Detail)
     upf=tk.Frame(win,bg=BG); upf.pack(side="bottom",fill="x",pady=(0,2))
     def do_upscale(scale):
-        if not getattr(win,"_last_path",None): set_status("Erst ein Bild erzeugen oder laden."); return
+        if not getattr(win,"_last_path",None): set_status("Generate or load an image first."); return
         threading.Thread(target=lambda:run_upscale(win._last_path,scale,set_status,show_image),daemon=True).start()
     def load_and_4k():
         from PIL import Image, ImageTk
-        f=filedialog.askopenfilename(title="Bild laden zum Hochskalieren",initialdir=OUTPUT_DIR,
-            filetypes=[("Bilder","*.png *.jpg *.jpeg *.webp"),("Alle","*.*")])
+        f=filedialog.askopenfilename(title="Load image to upscale",initialdir=OUTPUT_DIR,
+            filetypes=[("Images","*.png *.jpg *.jpeg *.webp"),("All","*.*")])
         if not f: return
         win._last_path=f
         try:
             win._pil=Image.open(f); _rescale()
         except: pass
-        set_status("Geladen - skaliere auf 4K...")
+        set_status("Loaded - upscaling to 4K...")
         threading.Thread(target=lambda:run_upscale(f,4.0,set_status,show_image),daemon=True).start()
-    tk.Button(upf,text="\U0001f53c HD (2x)",font=sub_f,bg="#1d2733",fg=GREEN,relief="flat",cursor="hand2",
+    tk.Button(upf,text="\U0001f53c HD (2x)",font=sub_f,bg=PANEL,fg=GREEN,relief="flat",cursor="hand2",
               command=lambda:do_upscale(2.0)).pack(side="left",expand=True,fill="x",padx=(24,3))
-    tk.Button(upf,text="\U0001f53c 4K (4x)",font=sub_f,bg="#1d2733",fg=GREEN,relief="flat",cursor="hand2",
+    tk.Button(upf,text="\U0001f53c 4K (4x)",font=sub_f,bg=PANEL,fg=GREEN,relief="flat",cursor="hand2",
               command=lambda:do_upscale(4.0)).pack(side="left",expand=True,fill="x",padx=3)
-    tk.Button(upf,text="\U0001f4c2 Bild laden→4K",font=sub_f,bg="#1d2733",fg=GREEN,relief="flat",cursor="hand2",
+    tk.Button(upf,text="\U0001f4c2 Load image→4K",font=sub_f,bg=PANEL,fg=GREEN,relief="flat",cursor="hand2",
               command=load_and_4k).pack(side="left",expand=True,fill="x",padx=(3,24))
 
-    img_lbl=tk.Label(win,bg=CARD,text="(hier erscheint dein Bild)",fg=SUB,font=sub_f)
+    img_lbl=tk.Label(win,bg=CARD,text="(your image appears here)",fg=SUB,font=sub_f)
     img_lbl.pack(side="top",padx=24,pady=6,fill="both",expand=True)
     img_lbl._ref=None
 
@@ -537,28 +650,28 @@ def open_generator():
         def _do():
             try:
                 win._last_path=path; win._pil=Image.open(path); _rescale()
-                set_status("Fertig! Gespeichert in "+os.path.basename(path))
+                set_status("Done! Saved as "+os.path.basename(path))
                 os.startfile(path)  # oeffnet automatisch im Bildbetrachter
-            except Exception as e: set_status(f"Anzeige-Fehler: {e}")
+            except Exception as e: set_status(f"Display error: {e}")
         win.after(0,_do)
     win.bind("<Configure>", lambda e: _rescale() if e.widget is win else None)
 
     def do_gen():
         p=prompt_box.get("1.0","end").strip()
-        if not p: set_status("Bitte erst etwas eintippen."); return
-        gen_btn.config(state="disabled",text="Generiere...")
+        if not p: set_status("Please type something first."); return
+        gen_btn.config(state="disabled",text="Generating...")
         engine,mf=MODELS[model_var.get()]; w,h,hires=SIZES[size_var.get()]
         def worker():
             pr=p
             if enhance_var.get():
-                set_status("KI optimiert deinen Prompt...")
+                set_status("AI is optimizing your prompt...")
                 try:
                     better=enhance_prompt(p)
-                    if better: pr=better; set_status("Optimiert: "+pr[:70]+"...")
-                except Exception as e: set_status(f"Optimierung uebersprungen ({e}) - nutze Original")
+                    if better: pr=better; set_status("Optimized: "+pr[:70]+"...")
+                except Exception as e: set_status(f"Optimization skipped ({e}) - using original")
             if char_var.get(): pr=pr+CHAR_SUFFIX
             generate(engine,mf,pr,w,h,hires,set_status,show_image)
-            win.after(0,lambda:gen_btn.config(state="normal",text="✨  Bild generieren"))
+            win.after(0,lambda:gen_btn.config(state="normal",text="✨  Generate image"))
         threading.Thread(target=worker,daemon=True).start()
 
     gen_btn.config(command=do_gen)
@@ -568,85 +681,87 @@ def open_3d_window():
     from PIL import Image, ImageTk
     if not os.path.exists(r"D:\tripo3d\TripoSR\run.py"):
         _open_cmd(r"D:\tripo3d\1-Setup-3D-installieren.cmd"); return
-    win=tk.Toplevel(root); win.title("OVRLKD - Bild zu 3D"); win.configure(bg=BG)
+    win=tk.Toplevel(root); win.title("OVRLKD - Image to 3D"); win.configure(bg=BG)
     win.geometry("560x640"); win.lift(); win.focus_force()
+    make_frameless(win, "OVRLKD - Image to 3D", win.destroy)
     win._img=None
-    tk.Label(win,text="\U0001f9ca Bild → 3D-Modell",font=title_f,bg=BG,fg=FG).pack(pady=(14,4))
-    tk.Label(win,text="Bild auswaehlen → Optionen → 3D erstellen (.obj fuer Mixamo/Meshy)",font=small_f,bg=BG,fg=SUB).pack(pady=(0,8))
+    tk.Label(win,text="\U0001f9ca Image → 3D model",font=title_f,bg=BG,fg=FG).pack(pady=(14,4))
+    tk.Label(win,text="Select image → options → create 3D (.obj for Mixamo/Meshy)",font=small_f,bg=BG,fg=SUB).pack(pady=(0,8))
 
-    pathvar=tk.StringVar(value="Noch kein Bild gewaehlt")
+    pathvar=tk.StringVar(value="No image selected yet")
     def pick():
-        f=filedialog.askopenfilename(title="Bild waehlen",initialdir=OUTPUT_DIR,
-            filetypes=[("Bilder","*.png *.jpg *.jpeg *.webp"),("Alle","*.*")])
+        f=filedialog.askopenfilename(title="Choose image",initialdir=OUTPUT_DIR,
+            filetypes=[("Images","*.png *.jpg *.jpeg *.webp"),("All","*.*")])
         if f:
             win._img=f; pathvar.set(os.path.basename(f))
             try:
                 im=Image.open(f); im.thumbnail((300,300)); ph=ImageTk.PhotoImage(im)
                 prev.config(image=ph,text=""); prev._ref=ph
             except: pass
-    tk.Button(win,text="\U0001f4c2  Bild auswaehlen",font=btn_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",command=pick).pack(fill="x",padx=24,pady=(2,2))
+    tk.Button(win,text="\U0001f4c2  Select image",font=btn_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",command=pick).pack(fill="x",padx=24,pady=(2,2))
     tk.Label(win,textvariable=pathvar,font=small_f,bg=BG,fg=SUB).pack()
-    prev=tk.Label(win,bg=CARD,text="(Vorschau)",fg=SUB,font=sub_f); prev.pack(padx=24,pady=8,fill="both",expand=True); prev._ref=None
+    prev=tk.Label(win,bg=CARD,text="(Preview)",fg=SUB,font=sub_f); prev.pack(padx=24,pady=8,fill="both",expand=True); prev._ref=None
 
     tex_var=tk.BooleanVar(value=True)
-    tk.Checkbutton(win,text="Mit Textur/Farbe (etwas langsamer)",variable=tex_var,font=sub_f,bg=BG,fg=FG,
+    tk.Checkbutton(win,text="With texture/color (a bit slower)",variable=tex_var,font=sub_f,bg=BG,fg=FG,
         selectcolor=CARD,activebackground=BG,activeforeground=FG).pack(anchor="w",padx=24)
     detrow=tk.Frame(win,bg=BG); detrow.pack(anchor="w",padx=24,pady=(2,0))
-    tk.Label(detrow,text="Detail (mehr Polygone = feiner, mehr RAM): ",font=sub_f,bg=BG,fg=SUB).pack(side="left")
-    DETAIL={"Standard (256)":256,"Hoch (320)":320,"Maximum (384)":384}
+    tk.Label(detrow,text="Detail (more polygons = finer, more RAM): ",font=sub_f,bg=BG,fg=SUB).pack(side="left")
+    DETAIL={"Standard (256)":256,"High (320)":320,"Maximum (384)":384}
     det_var=tk.StringVar(value="Standard (256)")
     ttk.Combobox(detrow,textvariable=det_var,values=list(DETAIL.keys()),state="readonly",width=15).pack(side="left")
 
-    st=tk.Label(win,text="Tipp: Charakter-Modus-Bilder (A-Pose, ganzer Koerper) riggen am besten.",font=small_f,bg=BG,fg=SUB); st.pack(pady=(4,2))
+    st=tk.Label(win,text="Tip: character-mode images (A-pose, full body) rig best.",font=small_f,bg=BG,fg=SUB); st.pack(pady=(4,2))
     def set_st(t): win.after(0,lambda:st.config(text=t))
 
     def do3d():
-        if not win._img: set_st("Bitte erst ein Bild auswaehlen."); return
-        go.config(state="disabled",text="Erstelle 3D... (30-90s)")
+        if not win._img: set_st("Please select an image first."); return
+        go.config(state="disabled",text="Creating 3D... (30-90s)")
         def worker():
             try:
-                set_st("ComfyUI-Speicher wird fuer 3D freigegeben...")
+                set_st("Freeing ComfyUI memory for 3D...")
                 try: urllib.request.urlopen(urllib.request.Request(f"{COMFY_API}/free",data=b'{"unload_models":true,"free_memory":true}',headers={"Content-Type":"application/json"}),timeout=5)
                 except: pass
-                set_st("Erzeuge 3D-Modell...")
+                set_st("Generating 3D model...")
                 mcres=DETAIL.get(det_var.get(),256)
                 cmd=[r"D:\tripo3d\venv\Scripts\python.exe","run.py",win._img,"--output-dir",r"D:\tripo3d\output","--model-save-format","obj","--mc-resolution",str(mcres),"--pretrained-model-name-or-path",r"D:\tripo3d\model"]
                 if tex_var.get(): cmd[6:6]=["--bake-texture","--texture-resolution","1024"]
                 r=subprocess.run(cmd,cwd=r"D:\tripo3d\TripoSR",capture_output=True,text=True,creationflags=subprocess.CREATE_NO_WINDOW)
                 out=r"D:\tripo3d\output\0\mesh.obj"
                 if os.path.exists(out):
-                    set_st("FERTIG! mesh.obj erstellt. Ordner oeffnet sich.")
+                    set_st("DONE! mesh.obj created. Opening folder.")
                     os.startfile(r"D:\tripo3d\output\0")
                 else:
-                    set_st("Fehler bei der 3D-Erstellung (Bild evtl. ungeeignet).")
-            except Exception as e: set_st(f"Fehler: {e}")
-            win.after(0,lambda:go.config(state="normal",text="\U0001f9ca  3D-Modell erstellen"))
+                    set_st("3D creation error (image may be unsuitable).")
+            except Exception as e: set_st(f"Error: {e}")
+            win.after(0,lambda:go.config(state="normal",text="\U0001f9ca  Create 3D model"))
         threading.Thread(target=worker,daemon=True).start()
 
-    go=tk.Button(win,text="\U0001f9ca  3D-Modell erstellen",font=btn_f,bg=ACCENT,fg="#1a0e08",relief="flat",cursor="hand2",command=do3d)
+    go=tk.Button(win,text="\U0001f9ca  Create 3D model",font=btn_f,bg=ACCENT,fg="#ffffff",relief="flat",cursor="hand2",command=do3d,activebackground=ACCENT_DK,activeforeground="#ffffff")
     go.pack(fill="x",padx=24,pady=(4,4))
-    tk.Button(win,text="\U0001f4c1 3D-Ordner oeffnen",font=small_f,bg=CARD,fg=SUB,relief="flat",cursor="hand2",
+    tk.Button(win,text="\U0001f4c1 Open 3D folder",font=small_f,bg=CARD,fg=SUB,relief="flat",cursor="hand2",
         command=lambda:os.startfile(r"D:\tripo3d\output") if os.path.exists(r"D:\tripo3d\output") else None).pack(pady=(0,10))
 
 # ---------- Gesicht tauschen (Face-Swap) Fenster ----------
 def open_faceswap_window():
     from PIL import Image, ImageTk
-    win=tk.Toplevel(root); win.title("OVRLKD - Gesicht tauschen"); win.configure(bg=BG)
+    win=tk.Toplevel(root); win.title("OVRLKD - Face swap"); win.configure(bg=BG)
     win.geometry("640x760"); win.minsize(560,680); win.lift(); win.focus_force()
+    make_frameless(win, "OVRLKD - Face swap", win.destroy)
     win._src=None; win._tgt=None; win._last=None
-    tk.Label(win,text="\U0001f3ad Gesicht tauschen",font=title_f,bg=BG,fg=FG).pack(pady=(14,2))
-    tk.Label(win,text="Dein Gesicht (1) kommt auf das Ziel-Bild (2). Laeuft 100% offline.",font=small_f,bg=BG,fg=SUB).pack(pady=(0,8))
+    tk.Label(win,text="\U0001f3ad Face swap",font=title_f,bg=BG,fg=FG).pack(pady=(14,2))
+    tk.Label(win,text="Your face (1) goes onto the target image (2). Runs 100% offline.",font=small_f,bg=BG,fg=SUB).pack(pady=(0,8))
 
     grid=tk.Frame(win,bg=BG); grid.pack(fill="x",padx=24)
     grid.columnconfigure(0,weight=1); grid.columnconfigure(1,weight=1)
-    srcvar=tk.StringVar(value="kein Gesicht gewaehlt"); tgtvar=tk.StringVar(value="kein Ziel gewaehlt")
-    tk.Label(grid,text="1) DEIN GESICHT",font=small_f,bg=BG,fg=ACCENT).grid(row=0,column=0,sticky="w")
-    tk.Label(grid,text="2) ZIEL-BILD (Body/Szene)",font=small_f,bg=BG,fg=ACCENT).grid(row=0,column=1,sticky="w",padx=(6,0))
-    src_prev=tk.Label(grid,bg=CARD,text="(Vorschau)",fg=SUB,font=small_f,height=9); src_prev.grid(row=1,column=0,sticky="nsew",padx=(0,6),pady=4); src_prev._ref=None
-    tgt_prev=tk.Label(grid,bg=CARD,text="(Vorschau)",fg=SUB,font=small_f,height=9); tgt_prev.grid(row=1,column=1,sticky="nsew",padx=(6,0),pady=4); tgt_prev._ref=None
+    srcvar=tk.StringVar(value="no face selected"); tgtvar=tk.StringVar(value="no target selected")
+    tk.Label(grid,text="1) YOUR FACE",font=small_f,bg=BG,fg=ACCENT).grid(row=0,column=0,sticky="w")
+    tk.Label(grid,text="2) TARGET IMAGE (body/scene)",font=small_f,bg=BG,fg=ACCENT).grid(row=0,column=1,sticky="w",padx=(6,0))
+    src_prev=tk.Label(grid,bg=CARD,text="(Preview)",fg=SUB,font=small_f,height=9); src_prev.grid(row=1,column=0,sticky="nsew",padx=(0,6),pady=4); src_prev._ref=None
+    tgt_prev=tk.Label(grid,bg=CARD,text="(Preview)",fg=SUB,font=small_f,height=9); tgt_prev.grid(row=1,column=1,sticky="nsew",padx=(6,0),pady=4); tgt_prev._ref=None
     def pick_into(which,prev,var):
-        f=filedialog.askopenfilename(title="Bild waehlen",initialdir=os.path.expanduser("~\\Desktop"),
-            filetypes=[("Bilder","*.png *.jpg *.jpeg *.webp"),("Alle","*.*")])
+        f=filedialog.askopenfilename(title="Choose image",initialdir=os.path.expanduser("~\\Desktop"),
+            filetypes=[("Images","*.png *.jpg *.jpeg *.webp"),("All","*.*")])
         if not f: return
         if which=="src": win._src=f
         else: win._tgt=f
@@ -655,28 +770,28 @@ def open_faceswap_window():
             im=Image.open(f); im.thumbnail((250,250)); ph=ImageTk.PhotoImage(im)
             prev.config(image=ph,text=""); prev._ref=ph
         except: pass
-    tk.Button(grid,text="\U0001f4c2 Gesicht waehlen",font=small_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",
+    tk.Button(grid,text="\U0001f4c2 Choose face",font=small_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",
         command=lambda:pick_into("src",src_prev,srcvar)).grid(row=2,column=0,sticky="ew",padx=(0,6),pady=2)
-    tk.Button(grid,text="\U0001f4c2 Ziel waehlen",font=small_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",
+    tk.Button(grid,text="\U0001f4c2 Choose target",font=small_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",
         command=lambda:pick_into("tgt",tgt_prev,tgtvar)).grid(row=2,column=1,sticky="ew",padx=(6,0),pady=2)
     tk.Label(grid,textvariable=srcvar,font=small_f,bg=BG,fg=SUB).grid(row=3,column=0,sticky="w")
     tk.Label(grid,textvariable=tgtvar,font=small_f,bg=BG,fg=SUB).grid(row=3,column=1,sticky="w",padx=(6,0))
 
     optf=tk.Frame(win,bg=BG); optf.pack(fill="x",padx=24,pady=(8,2))
-    tk.Label(optf,text="Kanten-Glaettung: ",font=sub_f,bg=BG,fg=SUB).pack(side="left")
-    REST={"Stark (empfohlen)":"strong","Leicht":"light","Aus (roh)":"none"}
-    rest_var=tk.StringVar(value="Stark (empfohlen)")
+    tk.Label(optf,text="Edge smoothing: ",font=sub_f,bg=BG,fg=SUB).pack(side="left")
+    REST={"Strong (recommended)":"strong","Light":"light","Off (raw)":"none"}
+    rest_var=tk.StringVar(value="Strong (recommended)")
     ttk.Combobox(optf,textvariable=rest_var,values=list(REST.keys()),state="readonly",width=18).pack(side="left")
 
-    go=tk.Button(win,text="\U0001f3ad  Gesichter tauschen",font=btn_f,bg=ACCENT,fg="#1a0e08",relief="flat",cursor="hand2")
+    go=tk.Button(win,text="\U0001f3ad  Swap faces",font=btn_f,bg=ACCENT,fg="#ffffff",relief="flat",cursor="hand2",activebackground=ACCENT_DK,activeforeground="#ffffff")
     go.pack(fill="x",padx=24,pady=(10,4))
-    st=tk.Label(win,text="Bereit. Erster Lauf laedt Modelle (~1-3 min auf 6GB).",font=sub_f,bg=BG,fg=GREEN); st.pack(pady=(2,4))
+    st=tk.Label(win,text="Ready. First run loads models (~1-3 min on 6GB).",font=sub_f,bg=BG,fg=GREEN); st.pack(pady=(2,4))
     botf=tk.Frame(win,bg=BG); botf.pack(side="bottom",fill="x",pady=(4,10))
-    tk.Button(botf,text="\U0001f50d Gross oeffnen",font=small_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",
+    tk.Button(botf,text="\U0001f50d Open large",font=small_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",
         command=lambda:os.startfile(win._last) if win._last and os.path.exists(win._last) else os.startfile(OUTPUT_DIR)).pack(side="left",expand=True,fill="x",padx=(24,6))
-    tk.Button(botf,text="\U0001f4c1 Ordner",font=small_f,bg=CARD,fg=SUB,relief="flat",cursor="hand2",
+    tk.Button(botf,text="\U0001f4c1 Folder",font=small_f,bg=CARD,fg=SUB,relief="flat",cursor="hand2",
         command=lambda:os.startfile(OUTPUT_DIR)).pack(side="left",expand=True,fill="x",padx=(6,24))
-    res=tk.Label(win,bg=CARD,text="(Ergebnis erscheint hier)",fg=SUB,font=sub_f); res.pack(side="top",padx=24,pady=6,fill="both",expand=True); res._ref=None
+    res=tk.Label(win,bg=CARD,text="(result appears here)",fg=SUB,font=sub_f); res.pack(side="top",padx=24,pady=6,fill="both",expand=True); res._ref=None
 
     def set_st(t): win.after(0,lambda:st.config(text=t))
     def show(path):
@@ -684,85 +799,86 @@ def open_faceswap_window():
             try:
                 win._last=path; im=Image.open(path); im.thumbnail((400,400)); ph=ImageTk.PhotoImage(im)
                 res.config(image=ph,text=""); res._ref=ph
-                set_st("Fertig! "+os.path.basename(path)); os.startfile(path)
-            except Exception as e: set_st(f"Anzeige-Fehler: {e}")
+                set_st("Done! "+os.path.basename(path)); os.startfile(path)
+            except Exception as e: set_st(f"Display error: {e}")
         win.after(0,_do)
     def do_swap():
-        if not win._src: set_st("Bitte erst dein Gesicht-Bild waehlen (1)."); return
-        if not win._tgt: set_st("Bitte erst ein Ziel-Bild waehlen (2)."); return
-        go.config(state="disabled",text="Tausche...")
+        if not win._src: set_st("Please select your face image first (1)."); return
+        if not win._tgt: set_st("Please select a target image first (2)."); return
+        go.config(state="disabled",text="Swapping...")
         key=REST.get(rest_var.get(),"strong")
         def worker():
             run_faceswap(win._tgt,win._src,key,set_st,show)
-            win.after(0,lambda:go.config(state="normal",text="\U0001f3ad  Gesichter tauschen"))
+            win.after(0,lambda:go.config(state="normal",text="\U0001f3ad  Swap faces"))
         threading.Thread(target=worker,daemon=True).start()
     go.config(command=do_swap)
 
 # ---------- Lippen-Sync (LivePortrait) Fenster ----------
 def open_lipsync_window():
     from PIL import Image, ImageTk
-    win=tk.Toplevel(root); win.title("OVRLKD - Lippen-Sync"); win.configure(bg=BG)
+    win=tk.Toplevel(root); win.title("OVRLKD - Lip sync"); win.configure(bg=BG)
     win.geometry("640x620"); win.minsize(560,560); win.lift(); win.focus_force()
+    make_frameless(win, "OVRLKD - Lip sync", win.destroy)
     win._src=None; win._drv=None; win._last=None
-    tk.Label(win,text="\U0001f444 Lippen-Sync",font=title_f,bg=BG,fg=FG).pack(pady=(14,2))
-    tk.Label(win,text="Foto (1) wird durch ein Treiber-Video (2) zum Leben erweckt - Mimik, Lippen, Kopf. Ton wird uebernommen.",
+    tk.Label(win,text="\U0001f444 Lip sync",font=title_f,bg=BG,fg=FG).pack(pady=(14,2))
+    tk.Label(win,text="Photo (1) is brought to life by a driving video (2) - expressions, lips, head. Audio is carried over.",
              font=small_f,bg=BG,fg=SUB,wraplength=600).pack(pady=(0,8))
 
     grid=tk.Frame(win,bg=BG); grid.pack(fill="x",padx=24)
     grid.columnconfigure(0,weight=1); grid.columnconfigure(1,weight=1)
-    srcvar=tk.StringVar(value="kein Foto"); drvvar=tk.StringVar(value="kein Video")
-    tk.Label(grid,text="1) FOTO (Gesicht)",font=small_f,bg=BG,fg=ACCENT).grid(row=0,column=0,sticky="w")
-    tk.Label(grid,text="2) TREIBER-VIDEO (jemand spricht/bewegt sich)",font=small_f,bg=BG,fg=ACCENT).grid(row=0,column=1,sticky="w",padx=(6,0))
-    src_prev=tk.Label(grid,bg=CARD,text="(Vorschau)",fg=SUB,font=small_f,height=8); src_prev.grid(row=1,column=0,sticky="nsew",padx=(0,6),pady=4); src_prev._ref=None
+    srcvar=tk.StringVar(value="no photo"); drvvar=tk.StringVar(value="no video")
+    tk.Label(grid,text="1) PHOTO (face)",font=small_f,bg=BG,fg=ACCENT).grid(row=0,column=0,sticky="w")
+    tk.Label(grid,text="2) DRIVING VIDEO (someone speaks/moves)",font=small_f,bg=BG,fg=ACCENT).grid(row=0,column=1,sticky="w",padx=(6,0))
+    src_prev=tk.Label(grid,bg=CARD,text="(Preview)",fg=SUB,font=small_f,height=8); src_prev.grid(row=1,column=0,sticky="nsew",padx=(0,6),pady=4); src_prev._ref=None
     drv_box=tk.Label(grid,bg=CARD,text="(mp4 / mov / webm)",fg=SUB,font=small_f,height=8); drv_box.grid(row=1,column=1,sticky="nsew",padx=(6,0),pady=4)
     def pick_src():
-        f=filedialog.askopenfilename(title="Foto waehlen",initialdir=os.path.expanduser("~\\Desktop"),
-            filetypes=[("Bilder","*.png *.jpg *.jpeg *.webp"),("Alle","*.*")])
+        f=filedialog.askopenfilename(title="Choose photo",initialdir=os.path.expanduser("~\\Desktop"),
+            filetypes=[("Images","*.png *.jpg *.jpeg *.webp"),("All","*.*")])
         if not f: return
         win._src=f; srcvar.set(os.path.basename(f)[:34])
         try:
             im=Image.open(f); im.thumbnail((250,250)); ph=ImageTk.PhotoImage(im); src_prev.config(image=ph,text=""); src_prev._ref=ph
         except: pass
     def pick_drv():
-        f=filedialog.askopenfilename(title="Treiber-Video waehlen",initialdir=os.path.expanduser("~\\Desktop"),
-            filetypes=[("Videos","*.mp4 *.mov *.webm *.avi *.mkv"),("Alle","*.*")])
+        f=filedialog.askopenfilename(title="Choose driving video",initialdir=os.path.expanduser("~\\Desktop"),
+            filetypes=[("Videos","*.mp4 *.mov *.webm *.avi *.mkv"),("All","*.*")])
         if not f: return
         win._drv=f; drvvar.set(os.path.basename(f)[:34]); drv_box.config(text="\U0001f3ac\n"+os.path.basename(f)[:24])
-    tk.Button(grid,text="\U0001f4c2 Foto waehlen",font=small_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",command=pick_src).grid(row=2,column=0,sticky="ew",padx=(0,6),pady=2)
-    tk.Button(grid,text="\U0001f4c2 Video waehlen",font=small_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",command=pick_drv).grid(row=2,column=1,sticky="ew",padx=(6,0),pady=2)
+    tk.Button(grid,text="\U0001f4c2 Choose photo",font=small_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",command=pick_src).grid(row=2,column=0,sticky="ew",padx=(0,6),pady=2)
+    tk.Button(grid,text="\U0001f4c2 Choose video",font=small_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",command=pick_drv).grid(row=2,column=1,sticky="ew",padx=(6,0),pady=2)
     tk.Label(grid,textvariable=srcvar,font=small_f,bg=BG,fg=SUB).grid(row=3,column=0,sticky="w")
     tk.Label(grid,textvariable=drvvar,font=small_f,bg=BG,fg=SUB).grid(row=3,column=1,sticky="w",padx=(6,0))
 
     optf=tk.Frame(win,bg=BG); optf.pack(fill="x",padx=24,pady=(8,2))
-    tk.Label(optf,text="Ausdrucksstaerke: ",font=sub_f,bg=BG,fg=SUB).pack(side="left")
-    EXPR={"Natuerlich":1.0,"Dezent":0.7,"Stark":1.4}
-    expr_var=tk.StringVar(value="Natuerlich")
+    tk.Label(optf,text="Expressiveness: ",font=sub_f,bg=BG,fg=SUB).pack(side="left")
+    EXPR={"Natural":1.0,"Subtle":0.7,"Strong":1.4}
+    expr_var=tk.StringVar(value="Natural")
     ttk.Combobox(optf,textvariable=expr_var,values=list(EXPR.keys()),state="readonly",width=14).pack(side="left")
 
-    go=tk.Button(win,text="\U0001f444  Foto zum Leben erwecken",font=btn_f,bg=ACCENT,fg="#1a0e08",relief="flat",cursor="hand2")
+    go=tk.Button(win,text="\U0001f444  Bring photo to life",font=btn_f,bg=ACCENT,fg="#ffffff",relief="flat",cursor="hand2",activebackground=ACCENT_DK,activeforeground="#ffffff")
     go.pack(fill="x",padx=24,pady=(10,4))
-    st=tk.Label(win,text="Tipp: Frontales Foto + kurzes Treiber-Video (3-8s) = bestes Ergebnis. Auf 1060 langsam.",font=sub_f,bg=BG,fg=GREEN,wraplength=600); st.pack(pady=(2,4))
+    st=tk.Label(win,text="Tip: frontal photo + short driving video (3-8s) = best result. Slow on 1060.",font=sub_f,bg=BG,fg=GREEN,wraplength=600); st.pack(pady=(2,4))
     botf=tk.Frame(win,bg=BG); botf.pack(side="bottom",fill="x",pady=(6,12))
     def open_res():
         if win._last and os.path.exists(win._last): os.startfile(win._last)
         else: os.startfile(OUTPUT_DIR)
-    tk.Button(botf,text="▶ Video abspielen",font=sub_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",command=open_res).pack(side="left",expand=True,fill="x",padx=(24,6))
-    tk.Button(botf,text="\U0001f4c1 Ordner",font=sub_f,bg=CARD,fg=SUB,relief="flat",cursor="hand2",command=lambda:os.startfile(OUTPUT_DIR)).pack(side="left",expand=True,fill="x",padx=(6,24))
+    tk.Button(botf,text="▶ Play video",font=sub_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",command=open_res).pack(side="left",expand=True,fill="x",padx=(24,6))
+    tk.Button(botf,text="\U0001f4c1 Folder",font=sub_f,bg=CARD,fg=SUB,relief="flat",cursor="hand2",command=lambda:os.startfile(OUTPUT_DIR)).pack(side="left",expand=True,fill="x",padx=(6,24))
 
     def set_st(t): win.after(0,lambda:st.config(text=t))
     def done(path):
         win._last=path
-        set_st("Fertig! "+os.path.basename(path)+" - oeffnet sich...")
+        set_st("Done! "+os.path.basename(path)+" - opening...")
         try: os.startfile(path)
         except: pass
     def do_go():
-        if not win._src: set_st("Bitte erst ein Foto waehlen (1)."); return
-        if not win._drv: set_st("Bitte erst ein Treiber-Video waehlen (2)."); return
-        go.config(state="disabled",text="Erwecke... (kann dauern)")
+        if not win._src: set_st("Please select a photo first (1)."); return
+        if not win._drv: set_st("Please select a driving video first (2)."); return
+        go.config(state="disabled",text="Bringing to life... (may take a while)")
         ex=EXPR.get(expr_var.get(),1.0)
         def worker():
             run_lipsync(win._src,win._drv,ex,set_st,done)
-            win.after(0,lambda:go.config(state="normal",text="\U0001f444  Foto zum Leben erwecken"))
+            win.after(0,lambda:go.config(state="normal",text="\U0001f444  Bring photo to life"))
         threading.Thread(target=worker,daemon=True).start()
     go.config(command=do_go)
 

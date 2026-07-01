@@ -1,0 +1,277 @@
+{
+  "_about": "Vulture AI bootstrap manifest. setup/install.py reads this to rebuild the whole environment from a fresh clone: ComfyUI + venv, custom nodes, model files and Ollama models. Everything is idempotent -- anything already present is skipped.",
+  "_schema": {
+    "models[]": "{ name, source, target_base, target_relative_path, approx_size_mb, license_note, required }",
+    "source.type": "one of: hf_file | hf_snapshot | url | ollama",
+    "target_base": "one of: comfy_models | comfy_custom_nodes | comfy_root | output | ollama  (resolved to a real folder from config.json)",
+    "required": "true = core feature depends on it; false = optional / heavy / feature-specific"
+  },
+  "_paths_note": "target_relative_path is relative to the resolved target_base. For ollama entries it is the model tag and target_base is 'ollama'.",
+
+  "comfyui": {
+    "_comment": "How to create the ComfyUI install + its venv when it is missing. Only used by the 'comfyui' bootstrap step. torch is pinned to the cu121 build that the RTX playbook validated (works on Pascal GTX 10xx through Ampere RTX 30xx).",
+    "repo": "https://github.com/comfyanonymous/ComfyUI.git",
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "torch_packages": ["torch==2.5.1", "torchvision==0.20.1", "torchaudio==2.5.1"],
+    "requirements": "requirements.txt"
+  },
+
+  "custom_nodes": [
+    {
+      "name": "ComfyUI-GGUF",
+      "repo": "https://github.com/city96/ComfyUI-GGUF.git",
+      "required": true,
+      "provides": ["UnetLoaderGGUF", "DualCLIPLoaderGGUF"],
+      "note": "FLUX GGUF loaders used by the image generator (wf_flux)."
+    },
+    {
+      "name": "ComfyUI_UltimateSDUpscale",
+      "repo": "https://github.com/ssitu/ComfyUI_UltimateSDUpscale.git",
+      "recurse_submodules": true,
+      "required": true,
+      "provides": ["UltimateSDUpscale"],
+      "note": "Tiled 4x-UltraSharp upscaling (wf_upscale)."
+    },
+    {
+      "name": "comfyui-reactor-node",
+      "repo": "https://github.com/Gourieff/comfyui-reactor-node.git",
+      "required": true,
+      "provides": ["ReActorFaceSwap"],
+      "note": "Face-swap. Needs insightface + onnxruntime. On Windows install the prebuilt insightface cp311 wheel from Gourieff/Assets if pip build fails. Downloads inswapper_128 + buffalo_l (see models below)."
+    },
+    {
+      "name": "ComfyUI-LivePortraitKJ",
+      "repo": "https://github.com/kijai/ComfyUI-LivePortraitKJ.git",
+      "required": true,
+      "provides": ["LivePortraitProcess", "LivePortraitCropper", "LivePortraitComposite", "DownloadAndLoadLivePortraitModels"],
+      "note": "Lip-sync / talking photos. Uses mediapipe -> re-pin numpy 1.26.4 afterwards."
+    },
+    {
+      "name": "ComfyUI-VideoHelperSuite",
+      "repo": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git",
+      "required": true,
+      "provides": ["VHS_LoadVideo", "VHS_VideoCombine"],
+      "note": "Load driver video + combine frames to mp4 (lip-sync). Pulls imageio-ffmpeg (bundled ffmpeg)."
+    },
+
+    {
+      "name": "ComfyUI-KJNodes",
+      "repo": "https://github.com/kijai/ComfyUI-KJNodes.git",
+      "required": false,
+      "note": "RTX video wave: helpers + Wan black-frame patch. Not used by the current core workflows."
+    },
+    {
+      "name": "ComfyUI-LTXVideo",
+      "repo": "https://github.com/Lightricks/ComfyUI-LTXVideo.git",
+      "required": false,
+      "note": "RTX video wave (LTX-2). Optional / future."
+    },
+    {
+      "name": "ComfyUI-WanVideoWrapper",
+      "repo": "https://github.com/kijai/ComfyUI-WanVideoWrapper.git",
+      "required": false,
+      "note": "RTX video wave (Wan 2.2). Optional / future."
+    },
+    {
+      "name": "ComfyUI-Impact-Pack",
+      "repo": "https://github.com/ltdrdata/ComfyUI-Impact-Pack.git",
+      "required": false,
+      "note": "Quality-of-life node pack. Not referenced by current studio.py workflows; install only if you extend them."
+    },
+    {
+      "name": "rgthree-comfy",
+      "repo": "https://github.com/rgthree/rgthree-comfy.git",
+      "required": false,
+      "note": "Graph QoL (reroutes, fast groups). Optional."
+    },
+    {
+      "name": "ComfyUI-Crystools",
+      "repo": "https://github.com/crystian/ComfyUI-Crystools.git",
+      "required": false,
+      "note": "On-canvas RAM/VRAM monitor. Optional."
+    },
+    {
+      "name": "comfyui_controlnet_aux",
+      "repo": "https://github.com/Fannovel16/comfyui_controlnet_aux.git",
+      "required": false,
+      "note": "ControlNet preprocessors. Optional (for future poses/depth work)."
+    }
+  ],
+
+  "pip_pins": [
+    {
+      "spec": "numpy==1.26.4",
+      "reason": "insightface (ReActor) + mediapipe (LivePortrait) break on numpy>=2. MUST be re-forced after every node install."
+    }
+  ],
+
+  "models": [
+    {
+      "name": "FLUX.1-schnell UNet (Q4_K_S GGUF)",
+      "source": { "type": "hf_file", "repo": "city96/FLUX.1-schnell-gguf", "file": "flux1-schnell-Q4_K_S.gguf" },
+      "target_base": "comfy_models",
+      "target_relative_path": "unet/flux1-schnell-Q4_K_S.gguf",
+      "approx_size_mb": 6800,
+      "license_note": "Apache-2.0 (commercial use OK). Base model: black-forest-labs/FLUX.1-schnell.",
+      "required": true
+    },
+    {
+      "name": "FLUX T5-XXL text encoder (fp8)",
+      "source": { "type": "hf_file", "repo": "comfyanonymous/flux_text_encoders", "file": "t5xxl_fp8_e4m3fn.safetensors" },
+      "target_base": "comfy_models",
+      "target_relative_path": "text_encoders/t5xxl_fp8_e4m3fn.safetensors",
+      "approx_size_mb": 4890,
+      "license_note": "T5 weights Apache-2.0.",
+      "required": true
+    },
+    {
+      "name": "FLUX CLIP-L text encoder",
+      "source": { "type": "hf_file", "repo": "comfyanonymous/flux_text_encoders", "file": "clip_l.safetensors" },
+      "target_base": "comfy_models",
+      "target_relative_path": "text_encoders/clip_l.safetensors",
+      "approx_size_mb": 246,
+      "license_note": "OpenAI CLIP (MIT).",
+      "required": true
+    },
+    {
+      "name": "FLUX autoencoder (VAE)",
+      "source": { "type": "hf_file", "repo": "black-forest-labs/FLUX.1-schnell", "file": "ae.safetensors", "rename_to": "flux_ae.safetensors" },
+      "target_base": "comfy_models",
+      "target_relative_path": "vae/flux_ae.safetensors",
+      "approx_size_mb": 335,
+      "license_note": "Apache-2.0. NOTE: this repo may require 'huggingface-cli login' + accepting the licence once. Mirror fallback: Comfy-Org/flux1-schnell.",
+      "required": true
+    },
+    {
+      "name": "FLUX T5-XXL encoder (Q8_0 GGUF, better on Pascal)",
+      "source": { "type": "hf_file", "repo": "city96/t5-v1_1-xxl-encoder-gguf", "file": "t5-v1_1-xxl-encoder-Q8_0.gguf" },
+      "target_base": "comfy_models",
+      "target_relative_path": "text_encoders/t5-v1_1-xxl-encoder-Q8_0.gguf",
+      "approx_size_mb": 5000,
+      "license_note": "Apache-2.0. Optional: studio.py prefers this over fp8 when present (no fp8 speedup on GTX 10xx).",
+      "required": false
+    },
+
+    {
+      "name": "DreamShaper v8 (SD1.5)",
+      "source": { "type": "hf_file", "repo": "Lykon/DreamShaper", "file": "DreamShaper_8_pruned.safetensors", "rename_to": "DreamShaper_v8.safetensors" },
+      "target_base": "comfy_models",
+      "target_relative_path": "checkpoints/DreamShaper_v8.safetensors",
+      "approx_size_mb": 2130,
+      "license_note": "CreativeML OpenRAIL-M (see model card for restrictions).",
+      "required": false
+    },
+    {
+      "name": "Realistic Vision v6 (SD1.5)",
+      "source": { "type": "hf_file", "repo": "SG161222/Realistic_Vision_V6.0_B1_noVAE", "file": "Realistic_Vision_V6.0_NV_B1.safetensors", "rename_to": "RealisticVision_v6.safetensors" },
+      "target_base": "comfy_models",
+      "target_relative_path": "checkpoints/RealisticVision_v6.safetensors",
+      "approx_size_mb": 2130,
+      "license_note": "CreativeML OpenRAIL-M. Used as the default checkpoint for img2img / upscale / face-swap.",
+      "required": true
+    },
+    {
+      "name": "ToonYou v6 (SD1.5)",
+      "source": { "type": "hf_file", "repo": "digiplay/ToonYou_v6", "file": "toonyou_beta6.safetensors", "rename_to": "ToonYou_v6.safetensors" },
+      "target_base": "comfy_models",
+      "target_relative_path": "checkpoints/ToonYou_v6.safetensors",
+      "approx_size_mb": 2130,
+      "license_note": "CreativeML OpenRAIL-M. If the HF file name differs, download from Civitai (ToonYou) and drop it in checkpoints/.",
+      "required": false
+    },
+
+    {
+      "name": "4x-UltraSharp upscaler",
+      "source": { "type": "hf_file", "repo": "lokCX/4x-Ultrasharp", "file": "4x-UltraSharp.pth" },
+      "target_base": "comfy_models",
+      "target_relative_path": "upscale_models/4x-UltraSharp.pth",
+      "approx_size_mb": 67,
+      "license_note": "Free to use with credit (Kim2091).",
+      "required": true
+    },
+
+    {
+      "name": "ReActor inswapper_128",
+      "source": { "type": "hf_file", "repo": "ezioruan/inswapper_128.onnx", "file": "inswapper_128.onnx" },
+      "target_base": "comfy_models",
+      "target_relative_path": "insightface/inswapper_128.onnx",
+      "approx_size_mb": 530,
+      "license_note": "InsightFace -- NON-COMMERCIAL / research use only.",
+      "required": false
+    },
+    {
+      "name": "InsightFace buffalo_l face-analysis pack",
+      "source": { "type": "url", "url": "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip", "extract": "zip" },
+      "target_base": "comfy_models",
+      "target_relative_path": "insightface/models/buffalo_l",
+      "approx_size_mb": 289,
+      "license_note": "InsightFace -- NON-COMMERCIAL / research use only. Zip is extracted into models/buffalo_l/.",
+      "required": false
+    },
+    {
+      "name": "CodeFormer face-restore",
+      "source": { "type": "url", "url": "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth" },
+      "target_base": "comfy_models",
+      "target_relative_path": "facerestore_models/codeformer.pth",
+      "approx_size_mb": 360,
+      "license_note": "S-Lab License 1.0 -- NON-COMMERCIAL. Used for edge smoothing after face-swap.",
+      "required": false
+    },
+
+    {
+      "name": "LivePortrait weights (Kijai safetensors)",
+      "source": { "type": "hf_snapshot", "repo": "Kijai/LivePortrait_safetensors" },
+      "target_base": "comfy_models",
+      "target_relative_path": "liveportrait",
+      "approx_size_mb": 1300,
+      "license_note": "LivePortrait (KwaiVGI) -- research use; MIT wrapper. The KJ node can also auto-download these on first run.",
+      "required": false
+    },
+
+    {
+      "name": "Ollama: qwen2.5-coder:7b",
+      "source": { "type": "ollama" },
+      "target_base": "ollama",
+      "target_relative_path": "qwen2.5-coder:7b",
+      "approx_size_mb": 4700,
+      "license_note": "Apache-2.0. REQUIRED: powers the 'optimise prompt' feature and is the default coding model on 6GB.",
+      "required": true
+    },
+    {
+      "name": "Ollama: qwen3.5:9b",
+      "source": { "type": "ollama" },
+      "target_base": "ollama",
+      "target_relative_path": "qwen3.5:9b",
+      "approx_size_mb": 5600,
+      "license_note": "Author's preferred local coder (12GB+). If the tag is not in the Ollama library on your date, keep qwen2.5-coder as coder_model.",
+      "required": false
+    },
+    {
+      "name": "Ollama: qwen3.5:4b",
+      "source": { "type": "ollama" },
+      "target_base": "ollama",
+      "target_relative_path": "qwen3.5:4b",
+      "approx_size_mb": 2800,
+      "license_note": "Fast, long-context. Optional.",
+      "required": false
+    },
+    {
+      "name": "Ollama: qwen3:14b",
+      "source": { "type": "ollama" },
+      "target_base": "ollama",
+      "target_relative_path": "qwen3:14b",
+      "approx_size_mb": 9000,
+      "license_note": "Larger chat model. Optional (needs 12GB+).",
+      "required": false
+    },
+    {
+      "name": "Ollama: deepseek-r1:7b",
+      "source": { "type": "ollama" },
+      "target_base": "ollama",
+      "target_relative_path": "deepseek-r1:7b",
+      "approx_size_mb": 4700,
+      "license_note": "MIT. Reasoning / debugging. Optional.",
+      "required": false
+    }
+  ]
+}
