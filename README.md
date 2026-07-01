@@ -46,6 +46,23 @@ no terminal.
   (Auto-filling chat memory from the chat UI is an optional integration.)
 - ⚙️ Context size **auto-scales** to your GPU — zero manual tuning
 
+## A look inside
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/gallery/create-images.png" width="400"><br><b>Create images</b> — FLUX + prompt optimizer, HD / 4K upscale, img2img</td>
+    <td width="50%"><img src="docs/gallery/image-3d.png" width="400"><br><b>Image → 3D</b> — a photo becomes a textured 3D model</td>
+  </tr>
+  <tr>
+    <td><img src="docs/gallery/face-swap.png" width="400"><br><b>Face swap</b> — your face onto any target, fully offline</td>
+    <td><img src="docs/gallery/lip-sync.png" width="400"><br><b>Lip sync</b> — a photo brought to life by a driving video</td>
+  </tr>
+  <tr>
+    <td><img src="docs/gallery/setup.png" width="400"><br><b>Setup &amp; install</b> — hardware check, per-GPU speed estimates, one-click install</td>
+    <td></td>
+  </tr>
+</table>
+
 ## Runs on modest hardware
 
 Most of this runs on a **GTX 1060 6GB**. It's slow on old cards, but it *works*.
