@@ -9,7 +9,10 @@ title Vulture AI - Code-RAG
 REM Load portable paths/ports from the config (repo\vulture\batenv.py).
 set "PYEXE=python"
 where python >nul 2>nul || set "PYEXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
-for /f "usebackq delims=" %%L in (`"%PYEXE%" "%~dp0..\vulture\batenv.py" 2^>nul`) do %%L
+set "VENVBAT=%TEMP%\vulture_env_%RANDOM%.bat"
+"%PYEXE%" "%~dp0..\vulture\batenv.py" > "%VENVBAT%" 2>nul
+if exist "%VENVBAT%" call "%VENVBAT%"
+del "%VENVBAT%" 2>nul
 
 REM Fallbacks if batenv did not run (fresh clone, or a wrong default python like 3.14).
 if not defined RAG_PORT set "RAG_PORT=8001"

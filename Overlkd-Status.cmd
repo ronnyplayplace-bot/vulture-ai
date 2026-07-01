@@ -4,7 +4,10 @@ title Overlkd AI Status (RAM / VRAM / GPU)
 REM Load portable paths/ports from the config (vulture\batenv.py) - once, before the loop
 set "PYEXE=python"
 where python >nul 2>nul || set "PYEXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
-for /f "usebackq delims=" %%L in (`"%PYEXE%" "%~dp0vulture\batenv.py" 2^>nul`) do %%L
+set "VENVBAT=%TEMP%\vulture_env_%RANDOM%.bat"
+"%PYEXE%" "%~dp0vulture\batenv.py" > "%VENVBAT%" 2>nul
+if exist "%VENVBAT%" call "%VENVBAT%"
+del "%VENVBAT%" 2>nul
 
 :loop
 cls
