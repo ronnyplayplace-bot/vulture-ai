@@ -29,6 +29,12 @@ photos/
 *.wav
 personal*
 
+# ...but DO allow intentional documentation screenshots
+!docs/
+!docs/*.png
+!docs/*.jpg
+!docs/*.webp
+
 # --- Internal planning notes (keep private) ---
 *STAND*.md
 *UPGRADE-PLAN*.md
