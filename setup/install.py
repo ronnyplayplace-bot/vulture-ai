@@ -164,6 +164,20 @@ def model_target_path(cfg: Config, entry: Dict[str, Any]) -> str:
     return _norm(os.path.join(base, entry["target_relative_path"]))
 
 
+def source_page(src: Dict[str, Any]) -> str:
+    """Human-facing page where a model can be downloaded by hand.
+
+    hf_file / hf_snapshot -> the HuggingFace repo page; url -> the file URL.
+    Used for the "get it yourself" manual instructions of non-commercial models.
+    """
+    stype = src.get("type")
+    if stype in ("hf_file", "hf_snapshot"):
+        return "https://huggingface.co/" + src.get("repo", "")
+    if stype == "url":
+        return src.get("url", "")
+    return src.get("url") or src.get("repo", "")
+
+
 def is_present(entry: Dict[str, Any], path: str) -> bool:
     """Existence check: file >1MB, or non-empty directory (snapshots/zip extracts)."""
     if not os.path.exists(path):
@@ -418,6 +432,7 @@ def step_models(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
         os.environ.setdefault("HF_HOME", hf_cache)
 
     stats = {"downloaded": 0, "skipped": 0, "failed": 0}
+    nc_skipped = 0  # non-commercial models Vulture NEVER downloads (user gets them manually)
     file_models = [m for m in manifest.get("models", [])
                    if m.get("source", {}).get("type") != "ollama"]
     if not args.dry_run and not args.list_only:
@@ -426,6 +441,18 @@ def step_models(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
             return stats
 
     for m in file_models:
+        # Non-commercial models are NEVER downloaded by Vulture. Regardless of any
+        # flag we always skip here -- BEFORE reaching any _download_* call -- and
+        # instead print manual "get it yourself" instructions. (personal/research
+        # licenses; the user fetches them and drops them in the folder themselves.)
+        if m.get("noncommercial"):
+            lic = m.get("license") or m.get("license_note") or "non-commercial"
+            page = source_page(m.get("source", {}))
+            target = model_target_path(live, m)
+            info(f"MANUAL (non-commercial, get it yourself): {m['name']} [{lic}] "
+                 f"-> download from {page} and place at {target}")
+            nc_skipped += 1
+            continue
         required = m.get("required", False)
         if not required and not args.include_optional:
             skip(f"{m['name']} (optional, {human_mb(m.get('approx_size_mb'))})")
@@ -472,6 +499,9 @@ def step_models(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
             if m.get("license_note", "").lower().find("login") >= 0:
                 warn("this repo may be gated -- run 'huggingface-cli login' and retry.")
             stats["failed"] += 1
+    if nc_skipped:
+        info(f"[note] {nc_skipped} non-commercial model(s) are NOT downloaded by Vulture. "
+             "Open the studio's \"Setup\" -> Manual models section for links + folders.")
     return stats
 
 
@@ -660,6 +690,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="print planned actions only")
     ap.add_argument("--force", action="store_true",
                     help="re-download / overwrite even if present")
+    ap.add_argument("--manual-list", action="store_true",
+                    help="print one tab-separated line per non-commercial (manual) model and exit; "
+                         "used by the studio's Setup window to render the Manual models section")
     ap.add_argument("--comfy-dir", default="",
                     help="where to install ComfyUI on a fresh machine")
     ap.add_argument("--config", default=None, help="path to an existing config.json to read")
@@ -672,6 +705,19 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     cfg = load_config(args.config)
     manifest = load_manifest()
+
+    # Machine-readable list of the models Vulture never downloads (the GUI parses this).
+    # One line per non-commercial model, nothing else -> keep this branch quiet.
+    if args.manual_list:
+        for m in manifest.get("models", []):
+            if not m.get("noncommercial"):
+                continue
+            lic = m.get("license") or m.get("license_note") or "non-commercial"
+            page = source_page(m.get("source", {}))
+            target = model_target_path(cfg, m)
+            present = 1 if os.path.exists(target) else 0
+            print(f"MANUAL\t{m['name']}\t{lic}\t{page}\t{target}\t{present}")
+        return 0
 
     banner("Vulture AI  --  bootstrap installer")
     info(f"repo root      : {REPO_ROOT}")

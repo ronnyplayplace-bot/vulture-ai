@@ -98,9 +98,16 @@ Vulture AI is free and always will be. A ⭐ on GitHub helps a ton. 🙏
 
 ## License
 
-[MIT](LICENSE) — free to use, modify and share. Please keep the credit.
-Vulture AI only licenses **its own launcher/UI code**; the bundled tools and
-models each have their own licenses (some non-commercial). See [NOTICE](NOTICE).
+The **Vulture launcher/UI is [MIT](LICENSE)** — use, modify and share freely,
+including commercially. Please keep the credit.
+
+Vulture bundles nothing — it downloads and launches third-party tools and
+models, each under its own license. **Most is commercial-friendly**: the default
+**FLUX.1-schnell** (Apache-2.0), SD1.5, TripoSR, the Qwen/DeepSeek LLMs, Ollama,
+Aider and ComfyUI. **A few models are non-commercial / research-only** —
+face-swap (InsightFace), CodeFormer, the 4x-UltraSharp upscaler, FLUX.1-dev,
+LivePortrait, and Hunyuan3D (scale/region limited). Vulture downloads those
+**only after you explicitly accept them**. Full breakdown in [NOTICE](NOTICE).
 
 ## Credits
 

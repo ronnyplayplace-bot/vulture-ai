@@ -2,7 +2,7 @@
 """Overlkd Studio AI - One window for everything, incl. a simple image generator."""
 import tkinter as tk
 from tkinter import font as tkfont, ttk, messagebox, filedialog
-import subprocess, socket, os, threading, webbrowser, json, urllib.request, time, random, io
+import subprocess, socket, os, threading, webbrowser, json, urllib.request, time, random, io, shutil
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # find the vulture pkg
@@ -549,11 +549,13 @@ tk.Frame(root,bg=DIV,height=1).pack(fill="x",padx=24,pady=(0,2))
 
 # ---- Footer: rotating slogan + subtle support link ----
 foot=tk.Frame(root,bg=BG); foot.pack(side="bottom",fill="x",padx=24,pady=(0,8))
-slogan_lbl=tk.Label(foot,text=SLOGANS[0],font=small_f,bg=BG,fg=SUB); slogan_lbl.pack(side="left")
+slogan_lbl=tk.Label(foot,text=SLOGANS[0],font=small_f,bg=BG,fg=SUB,width=52,anchor="w"); slogan_lbl.pack(side="left")
 sup_lbl=tk.Label(foot,text="♥ Support",font=small_f,bg=BG,fg=ACCENT_LT,cursor="hand2"); sup_lbl.pack(side="right")
 sup_lbl.bind("<Button-1>",lambda e:open_support_window())
 setup_lbl=tk.Label(foot,text="⚙ Setup",font=small_f,bg=BG,fg=ACCENT_LT,cursor="hand2"); setup_lbl.pack(side="right",padx=(0,16))
 setup_lbl.bind("<Button-1>",lambda e:open_setup_window())
+req_lbl=tk.Label(foot,text="📋 Licenses",font=small_f,bg=BG,fg=ACCENT_LT,cursor="hand2"); req_lbl.pack(side="right",padx=(0,16))
+req_lbl.bind("<Button-1>",lambda e:open_requirements_window())
 def _rotate_slogan(i=0):
     slogan_lbl.config(text=SLOGANS[i % len(SLOGANS)])
     root.after(6000, lambda:_rotate_slogan(i+1))
@@ -1243,10 +1245,27 @@ def open_setup_window():
 
     tk.Label(win,text="⚙ Setup & install",font=title_f,bg=BG,fg=FG).pack(pady=(14,2))
     tk.Label(win,text="One click installs everything — no terminal needed.",
-             font=small_f,bg=BG,fg=SUB,wraplength=660).pack(pady=(0,8))
+             font=small_f,bg=BG,fg=SUB,wraplength=660).pack(pady=(0,2))
+    req_link=tk.Label(win,text="📋 Requirements & licenses",font=small_f,bg=BG,fg=ACCENT_LT,cursor="hand2")
+    req_link.pack(pady=(0,6)); req_link.bind("<Button-1>",lambda e:open_requirements_window())
+
+    # --- Scrollable body: content can exceed the window; scroll with wheel / scrollbar ---
+    _scwrap=tk.Frame(win,bg=BG); _scwrap.pack(fill="both",expand=True)
+    _canvas=tk.Canvas(_scwrap,bg=BG,highlightthickness=0)
+    _vsb=tk.Scrollbar(_scwrap,orient="vertical",command=_canvas.yview)
+    _canvas.configure(yscrollcommand=_vsb.set)
+    _vsb.pack(side="right",fill="y"); _canvas.pack(side="left",fill="both",expand=True)
+    body=tk.Frame(_canvas,bg=BG)
+    _bid=_canvas.create_window((0,0),window=body,anchor="nw")
+    body.bind("<Configure>",lambda e:_canvas.configure(scrollregion=_canvas.bbox("all")))
+    _canvas.bind("<Configure>",lambda e:_canvas.itemconfig(_bid,width=e.width))
+    def _wheel(e):
+        try: _canvas.yview_scroll(int(-1*(e.delta/120)),"units")
+        except Exception: pass
+    win.bind("<MouseWheel>",_wheel)
 
     # --- A) Hardware check ---
-    hwcard=tk.Frame(win,bg=CARD); hwcard.pack(fill="x",padx=24,pady=(0,6))
+    hwcard=tk.Frame(body,bg=CARD); hwcard.pack(fill="x",padx=24,pady=(0,6))
     hw_lbl=tk.Label(hwcard,text="Detecting hardware…",font=sub_f,bg=CARD,fg=ACCENT_LT,
                     anchor="w",wraplength=560,justify="left")
     hw_lbl.pack(side="left",fill="x",expand=True,padx=10,pady=8)
@@ -1254,7 +1273,7 @@ def open_setup_window():
     redet.pack(side="right",padx=10)
 
     # --- A2) Install location (which drive/folder everything goes on) ---
-    loc_card=tk.Frame(win,bg=CARD); loc_card.pack(fill="x",padx=24,pady=(0,6))
+    loc_card=tk.Frame(body,bg=CARD); loc_card.pack(fill="x",padx=24,pady=(0,6))
     tk.Label(loc_card,text="INSTALL LOCATION",font=small_f,bg=CARD,fg=ACCENT).pack(anchor="w",padx=10,pady=(8,0))
     loc_root_lbl=tk.Label(loc_card,text="",font=sub_f,bg=CARD,fg=FG,anchor="w",wraplength=640,justify="left")
     loc_root_lbl.pack(anchor="w",fill="x",padx=10,pady=(1,0))
@@ -1298,7 +1317,7 @@ def open_setup_window():
 
     # --- B) Model list with hardware-scaled speed estimates ---
     groups,from_manifest=_setup_load_models()
-    models_frame=tk.Frame(win,bg=BG); models_frame.pack(fill="x",padx=24,pady=(0,4))
+    models_frame=tk.Frame(body,bg=BG); models_frame.pack(fill="x",padx=24,pady=(0,4))
     def render_models(mult):
         for w in models_frame.winfo_children():
             try: w.destroy()
@@ -1331,17 +1350,17 @@ def open_setup_window():
         threading.Thread(target=detect_worker,daemon=True).start()
     redet.bind("<Button-1>",lambda e:redetect())
 
-    tk.Frame(win,bg=DIV,height=1).pack(fill="x",padx=24,pady=(8,6))
+    tk.Frame(body,bg=DIV,height=1).pack(fill="x",padx=24,pady=(8,6))
 
     # --- C) One-click install (streams the installer output, no terminal) ---
     INSTALLER=os.path.join(_APPDIR,"setup","install.py")
     have_installer=os.path.exists(INSTALLER)
 
-    st=tk.Label(win,text="Ready." if have_installer else "Installer not found.",
+    st=tk.Label(body,text="Ready." if have_installer else "Installer not found.",
                 font=sub_f,bg=BG,fg=GREEN,wraplength=660)
     def set_st(t): win.after(0,lambda:st.config(text=t))
 
-    btnrow=tk.Frame(win,bg=BG); btnrow.pack(fill="x",padx=24,pady=(2,2))
+    btnrow=tk.Frame(body,bg=BG); btnrow.pack(fill="x",padx=24,pady=(2,2))
     install_btn=tk.Button(btnrow,text="⤓  Install everything",font=btn_f,bg=ACCENT,fg="#ffffff",
                           relief="flat",cursor="hand2",activebackground=ACCENT_DK,activeforeground="#ffffff")
     install_btn.pack(fill="x",pady=(0,4))
@@ -1351,20 +1370,90 @@ def open_setup_window():
     tk.Label(btnrow,text="Installs go to the location chosen above (Auto = default drive).",
              font=small_f,bg=BG,fg=SUB,anchor="w",wraplength=660,justify="left").pack(fill="x",pady=(3,0))
 
-    note_lbl=tk.Label(win,font=small_f,bg=BG,fg=SUB,wraplength=660,justify="left")
+    tk.Label(btnrow,text="Everything else installs by default and is fine for commercial use. See 📋 Licenses.",
+             font=small_f,bg=BG,fg=SUB,anchor="w",wraplength=660,justify="left").pack(fill="x",pady=(6,0))
+
+    # --- Manual models: non-commercial, the USER downloads these (Vulture NEVER does) ---
+    # Populated from `install.py --manual-list` (one MANUAL\t… line per model). Every
+    # widget update happens on the Tk main thread via win.after; the subprocess runs
+    # in a worker thread so the window never blocks.
+    man_card=tk.Frame(body,bg=CARD); man_card.pack(fill="x",padx=24,pady=(8,6))
+    manhdr=tk.Frame(man_card,bg=CARD); manhdr.pack(fill="x",padx=10,pady=(8,0))
+    tk.Label(manhdr,text="📥 Manual models — you download these (non-commercial)",
+             font=small_f,bg=CARD,fg=ACCENT).pack(side="left")
+    man_recheck=tk.Label(manhdr,text="↻ Re-check",font=small_f,bg=CARD,fg=SUB,cursor="hand2")
+    man_recheck.pack(side="right")
+    tk.Label(man_card,text="Vulture never downloads these — their licenses are personal / "
+             "research use only. Get them yourself, drop them in the folder, then Re-check.",
+             font=small_f,bg=CARD,fg=SUB,anchor="w",wraplength=640,justify="left").pack(
+             anchor="w",fill="x",padx=10,pady=(1,4))
+    man_rows=tk.Frame(man_card,bg=CARD); man_rows.pack(fill="x",padx=10,pady=(0,8))
+
+    def _man_open_folder(target):
+        # Make the destination folder (so it exists to drop the file into) and open it.
+        try:
+            d=os.path.dirname(target); os.makedirs(d,exist_ok=True); os.startfile(d)
+        except Exception: pass
+    def _man_render(items):
+        # (main thread) rebuild the rows. items: None = loading, str = error, list = models.
+        for w in man_rows.winfo_children():
+            try: w.destroy()
+            except Exception: pass
+        if items is None:
+            tk.Label(man_rows,text="Checking…",font=small_f,bg=CARD,fg=SUB).pack(anchor="w"); return
+        if isinstance(items,str):
+            tk.Label(man_rows,text=items,font=small_f,bg=CARD,fg=RED,anchor="w",
+                     wraplength=620,justify="left").pack(anchor="w"); return
+        if not items:
+            tk.Label(man_rows,text="No manual models needed. ✓",font=small_f,bg=CARD,fg=GREEN).pack(anchor="w"); return
+        for it in items:
+            row=tk.Frame(man_rows,bg=CARD); row.pack(fill="x",pady=2)
+            tk.Label(row,text="●",font=small_f,bg=CARD,fg=GREEN if it["present"] else RED).pack(side="left")
+            fold=tk.Label(row,text="📂 Folder",font=small_f,bg=CARD,fg=ACCENT_LT,cursor="hand2"); fold.pack(side="right",padx=(6,0))
+            fold.bind("<Button-1>",lambda e,t=it["target"]:_man_open_folder(t))
+            get=tk.Label(row,text="🔗 Get it",font=small_f,bg=CARD,fg=ACCENT_LT,cursor="hand2"); get.pack(side="right",padx=(6,0))
+            get.bind("<Button-1>",lambda e,u=it["page"]:webbrowser.open(u))
+            meta=tk.Frame(row,bg=CARD); meta.pack(side="left",fill="x",expand=True,padx=(4,0))
+            tk.Label(meta,text=it["name"],font=small_f,bg=CARD,fg=FG,anchor="w").pack(anchor="w")
+            tk.Label(meta,text=it["license"],font=small_f,bg=CARD,fg=SUB,anchor="w").pack(anchor="w")
+    def _man_refresh():
+        if not have_installer:
+            _man_render("Installer not found — cannot list manual models."); return
+        _man_render(None)
+        def worker():
+            try:
+                py=cfg.system_python or sys.executable
+                out=subprocess.run([py, INSTALLER, "--manual-list"], cwd=_APPDIR,
+                    capture_output=True, text=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW).stdout or ""
+                items=[]
+                for line in out.splitlines():
+                    if not line.startswith("MANUAL\t"): continue
+                    parts=line.split("\t")
+                    if len(parts)<6: continue
+                    _tag,name,lic,page,target,present=parts[:6]
+                    items.append({"name":name,"license":lic,"page":page,
+                                  "target":target,"present":present.strip()=="1"})
+                win.after(0,lambda:_man_render(items))
+            except Exception as e:
+                win.after(0,lambda m=str(e):_man_render("Could not list manual models: "+m))
+        threading.Thread(target=worker,daemon=True).start()
+    man_recheck.bind("<Button-1>",lambda e:_man_refresh())
+
+    note_lbl=tk.Label(body,font=small_f,bg=BG,fg=SUB,wraplength=660,justify="left")
     if not have_installer:
         note_lbl.config(text="Installer not found — this looks like a dev copy. In a fresh "
                              "`git clone` the setup/ folder is present.")
         note_lbl.pack(fill="x",padx=24,pady=(4,2))
 
     # --- output log (read-only, dark; like the Code-RAG results box) ---
-    outf=tk.Frame(win,bg=CARD); outf.pack(fill="both",expand=True,padx=24,pady=(6,4))
+    outf=tk.Frame(body,bg=CARD); outf.pack(fill="x",padx=24,pady=(6,4))
     sb=tk.Scrollbar(outf); sb.pack(side="right",fill="y")
     log=tk.Text(outf,bg=CARD,fg="#c8c8c8",font=("Consolas",9),relief="flat",wrap="word",
-                yscrollcommand=sb.set,padx=10,pady=8,height=12,bd=0,highlightthickness=0)
+                yscrollcommand=sb.set,padx=10,pady=8,height=10,bd=0,highlightthickness=0)
     log.pack(side="left",fill="both",expand=True); sb.config(command=log.yview)
     log.insert("end","Install progress will appear here.\n"); log.config(state="disabled")
-    st.pack(side="bottom",pady=(2,10))
+    st.pack(pady=(2,10))
 
     def _log(s):
         def _do():
@@ -1403,12 +1492,182 @@ def open_setup_window():
                 win.after(0,lambda:(install_btn.config(state="normal"),check_btn.config(state="normal")))
         threading.Thread(target=worker,daemon=True).start()
 
+    # Ollama prerequisite gate: the real install pulls the local LLMs, so Ollama must
+    # be present first. The "Check what's missing" (--list) button stays available.
+    OLLAMA_EXE=os.path.join(os.environ.get("LOCALAPPDATA",""),"Programs","Ollama","ollama.exe")
+    def _ollama_ready():
+        return port_open(cfg.ollama_port) or os.path.exists(OLLAMA_EXE)
+    def do_install():
+        if not _ollama_ready():
+            set_st("Install the Ollama desktop app first (ollama.com) — Vulture needs it for the local LLMs.")
+            return
+        args=[]
+        run_installer(args, "Install")
+    def do_check():
+        args=["--list"]
+        run_installer(args, "Check")
+
     if have_installer:
-        install_btn.config(command=lambda:run_installer([], "Install"))
-        check_btn.config(command=lambda:run_installer(["--list"], "Check"))
+        install_btn.config(command=do_install)
+        check_btn.config(command=do_check)
     else:
         install_btn.config(state="disabled"); check_btn.config(state="disabled")
 
     redetect()  # auto-run the hardware check on open
+    _man_refresh()  # auto-list the manual (non-commercial) models on open
+
+# ---------- First-run Requirements & licenses window ----------
+# Vulture is a launcher: it must NOT hide the prerequisites the user installs
+# themselves, what it downloads from original sources, or the non-commercial
+# model licenses. Shown once on first launch (until "I understand"), and always
+# reachable from the footer "📋 Licenses" link and inside ⚙ Setup.
+def open_requirements_window():
+    win=tk.Toplevel(root); win.title("Overlkd - Requirements & licenses"); win.configure(bg=BG)
+    win.geometry("720x780"); win.minsize(620,620); win.resizable(True,True)
+    win.lift(); win.focus_force()
+    make_frameless(win, "Vulture AI — Requirements & licenses", win.destroy)
+
+    # --- Fixed header ---
+    tk.Label(win,text="📋 Requirements & licenses",font=title_f,bg=BG,fg=FG).pack(pady=(14,2))
+    tk.Label(win,text="Vulture is a launcher — you install the tools, it runs them. Please read once.",
+             font=small_f,bg=BG,fg=SUB,wraplength=660).pack(pady=(0,6))
+
+    # --- Fixed footer (packed before the scroll body so it stays visible) ---
+    footer=tk.Frame(win,bg=BG); footer.pack(side="bottom",fill="x")
+    def _ack():
+        try: _write_config_key("runtime","requirements_ack",True)
+        except Exception: pass
+        win.destroy()
+    ack_btn=tk.Button(footer,text="✓  I understand — continue",font=btn_f,bg=ACCENT,fg="#ffffff",
+                      relief="flat",cursor="hand2",activebackground=ACCENT_DK,activeforeground="#ffffff",
+                      command=_ack)
+    ack_btn.pack(fill="x",padx=24,pady=(8,2))
+    tk.Label(footer,text="You can reopen this anytime from ⚙ Setup.",
+             font=small_f,bg=BG,fg=SUB).pack(pady=(0,10))
+
+    # --- Scrollable body: content is long (same pattern as open_setup_window) ---
+    _scwrap=tk.Frame(win,bg=BG); _scwrap.pack(fill="both",expand=True)
+    _canvas=tk.Canvas(_scwrap,bg=BG,highlightthickness=0)
+    _vsb=tk.Scrollbar(_scwrap,orient="vertical",command=_canvas.yview)
+    _canvas.configure(yscrollcommand=_vsb.set)
+    _vsb.pack(side="right",fill="y"); _canvas.pack(side="left",fill="both",expand=True)
+    body=tk.Frame(_canvas,bg=BG)
+    _bid=_canvas.create_window((0,0),window=body,anchor="nw")
+    body.bind("<Configure>",lambda e:_canvas.configure(scrollregion=_canvas.bbox("all")))
+    _canvas.bind("<Configure>",lambda e:_canvas.itemconfig(_bid,width=e.width))
+    def _wheel(e):
+        try: _canvas.yview_scroll(int(-1*(e.delta/120)),"units")
+        except Exception: pass
+    win.bind("<MouseWheel>",_wheel)
+
+    # === Section 1 — install these yourself first (with live detection) ===
+    sec1=tk.Frame(body,bg=CARD); sec1.pack(fill="x",padx=24,pady=(0,6))
+    s1head=tk.Frame(sec1,bg=CARD); s1head.pack(fill="x",padx=10,pady=(8,2))
+    tk.Label(s1head,text="① Install these yourself first",font=sub_f,bg=CARD,fg=ACCENT).pack(side="left")
+    recheck=tk.Label(s1head,text="↻ Re-check",font=small_f,bg=CARD,fg=SUB,cursor="hand2"); recheck.pack(side="right")
+    rows_frame=tk.Frame(sec1,bg=CARD); rows_frame.pack(fill="x",padx=10,pady=(0,8))
+
+    req_rows={}
+    def _req_row(key,name,why,url=None):
+        r=tk.Frame(rows_frame,bg=CARD); r.pack(fill="x",pady=2)
+        dot=tk.Label(r,text="●",font=small_f,bg=CARD,fg=SUB); dot.pack(side="left")
+        base=f" {name} — {why}"
+        txt=tk.Label(r,text=base+"  (checking…)",font=small_f,bg=CARD,fg=FG,anchor="w",
+                     wraplength=500,justify="left"); txt.pack(side="left",fill="x",expand=True)
+        if url:
+            link=tk.Label(r,text="Get it ↗",font=small_f,bg=CARD,fg=ACCENT_LT,cursor="hand2")
+            link.pack(side="right"); link.bind("<Button-1>",lambda e,u=url:webbrowser.open(u))
+        req_rows[key]=(dot,txt,base)
+    def _set_row(key,ok,detail):
+        d=req_rows.get(key)
+        if not d: return
+        dot,txt,base=d
+        dot.config(fg=GREEN if ok else RED)
+        txt.config(text=base+(f"  ({detail})" if detail else ""))
+
+    _req_row("gpu","NVIDIA GPU + driver","for GPU-accelerated image/3D/video",
+             "https://www.nvidia.com/Download/index.aspx")
+    _req_row("python","Python 3.11 (64-bit)","runs Vulture and the tools",
+             "https://www.python.org/downloads/")
+    _req_row("git","Git","clone & update repos and tools","https://git-scm.com/download/win")
+    _req_row("ollama","Ollama desktop app","Vulture pulls the LLMs into it",
+             "https://ollama.com/download")
+    _req_row("disk","~100 GB free disk","the models are large")
+
+    def _detect():
+        out={}
+        try: out["gpu"]=(detect_gpu().get("name","") or "")
+        except Exception: out["gpu"]=""
+        out["python"]=bool(shutil.which("python"))
+        out["git"]=bool(shutil.which("git"))
+        exe=os.path.join(os.environ.get("LOCALAPPDATA",""),"Programs","Ollama","ollama.exe")
+        try: out["ollama"]=bool(port_open(11434) or os.path.exists(exe))
+        except Exception: out["ollama"]=os.path.exists(exe)
+        try: out["free_gb"]=shutil.disk_usage(_APPDIR).free/(1024**3)
+        except Exception: out["free_gb"]=0.0
+        def apply():
+            if not win.winfo_exists(): return
+            gn=out["gpu"]
+            _set_row("gpu",bool(gn),gn or "not detected")
+            _set_row("python",out["python"],"found" if out["python"] else "not found — install it")
+            _set_row("git",out["git"],"found" if out["git"] else "not found — install it")
+            _set_row("ollama",out["ollama"],"detected" if out["ollama"] else "not detected")
+            fg=out["free_gb"]
+            _set_row("disk",fg>=100,f"{fg:.0f} GB free" if fg>0 else "unknown")
+        win.after(0,apply)
+    def recheck_now():
+        for k,(dot,txt,base) in req_rows.items():
+            dot.config(fg=SUB); txt.config(text=base+"  (checking…)")
+        threading.Thread(target=_detect,daemon=True).start()
+    recheck.bind("<Button-1>",lambda e:recheck_now())
+
+    # === Section 2 — what Vulture downloads & launches for you ===
+    sec2=tk.Frame(body,bg=CARD); sec2.pack(fill="x",padx=24,pady=(0,6))
+    tk.Label(sec2,text="② What Vulture downloads & launches for you",
+             font=sub_f,bg=CARD,fg=ACCENT).pack(anchor="w",padx=10,pady=(8,2))
+    tk.Label(sec2,text="Nothing is bundled — Vulture downloads each tool/model from its original source "
+             "and runs tools as separate processes, so you accept each project's own license.",
+             font=small_f,bg=CARD,fg=FG,anchor="w",wraplength=640,justify="left").pack(anchor="w",padx=10,pady=(0,4))
+    for _ln in ("• ComfyUI (image/3D backend) — GPL-3.0, launched as a separate process",
+                "• Models from HuggingFace & original repos (FLUX, SD1.5, 3D, face, upscaler)",
+                "• Local LLMs via `ollama pull` (Qwen, DeepSeek)"):
+        tk.Label(sec2,text=_ln,font=small_f,bg=CARD,fg=SUB,anchor="w",
+                 wraplength=640,justify="left").pack(anchor="w",padx=16,pady=1)
+    tk.Frame(sec2,bg=CARD,height=6).pack()
+
+    # === Section 3 — licenses (most commercial-OK, a few models are NOT) ===
+    sec3=tk.Frame(body,bg=CARD); sec3.pack(fill="x",padx=24,pady=(0,6))
+    tk.Label(sec3,text="③ Licenses — most is free for commercial use, a few models are NOT",
+             font=sub_f,bg=CARD,fg=ACCENT,anchor="w",wraplength=640,justify="left").pack(anchor="w",padx=10,pady=(8,4))
+    tk.Label(sec3,text="✅ Commercial-OK: FLUX.1-schnell (the default image model — you own your images), "
+             "SD1.5 checkpoints, TripoSR (3D), the local LLMs (Qwen / DeepSeek), Ollama, Aider, ComfyUI.",
+             font=small_f,bg=CARD,fg=GREEN,anchor="w",wraplength=640,justify="left").pack(anchor="w",padx=10,pady=(0,6))
+    tk.Label(sec3,text="⛔ Personal / research only (their authors' rule — NOT for commercial products):",
+             font=sub_f,bg=CARD,fg=RED,anchor="w",wraplength=640,justify="left").pack(anchor="w",padx=10,pady=(2,2))
+    for _ln in ("• Face swap — InsightFace models (inswapper_128 + buffalo_l)",
+                "• Face restore — CodeFormer (S-Lab license)",
+                "• 4x-UltraSharp upscaler (CC-BY-NC-SA) — swap to a permissive upscaler for commercial work",
+                "• FLUX.1-dev — if you switch off the schnell default",
+                "• LivePortrait — ships the non-commercial InsightFace detector",
+                "• Hunyuan3D (Tencent) — commercial only if under 1M monthly users AND not in the EU / UK / South Korea"):
+        tk.Label(sec3,text=_ln,font=small_f,bg=CARD,fg=SUB,anchor="w",
+                 wraplength=630,justify="left").pack(anchor="w",padx=16,pady=1)
+    tk.Label(sec3,text="Open WebUI's name/logo must stay visible (don't white-label its chat).",
+             font=small_f,bg=CARD,fg=SUB,anchor="w",wraplength=640,justify="left").pack(anchor="w",padx=10,pady=(6,2))
+    notice=tk.Label(sec3,text="Open the full license notes (NOTICE) ↗",
+                    font=small_f,bg=CARD,fg=ACCENT_LT,cursor="hand2")
+    notice.pack(anchor="w",padx=10,pady=(2,8))
+    def _open_notice(e=None):
+        try: os.startfile(os.path.join(_APPDIR,"NOTICE"))
+        except Exception: pass
+    notice.bind("<Button-1>",_open_notice)
+
+    recheck_now()  # run the live detection on open (threaded, non-blocking)
+
+# --- First run: show Requirements & licenses once (until acknowledged) ---
+try: _req_ack=bool(cfg._r("requirements_ack"))
+except Exception: _req_ack=False
+if not _req_ack:
+    root.after(500, open_requirements_window)
 
 root.mainloop()

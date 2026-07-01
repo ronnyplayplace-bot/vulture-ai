@@ -1,28 +1,56 @@
-Vulture AI — by Overlkd Studio
-Copyright (c) 2026 Overlkd Studio
+Vulture AI — Third-Party Components & Licenses
+===============================================
+Vulture AI is an MIT-licensed launcher/UI. It does NOT bundle any model
+weights. Its installer downloads each tool and model from its original source,
+and it runs tools (ComfyUI, Ollama, Open WebUI, Aider) as separate processes.
+Each component remains under its own license, reproduced/linked below. By
+installing, you agree to the licenses of the downloaded components.
 
-Vulture AI is a launcher/UI that ties together many excellent open-source
-projects. It does not redistribute their code or model weights — it installs and
-runs them on the user's machine. All credit for the underlying capabilities goes
-to these projects and their authors. Please support them.
+--- PERMISSIVE CODE (MIT / Apache-2.0 / BSD) ---
+  Ollama .................... MIT
+  Aider ..................... Apache-2.0
+  fastembed ................. Apache-2.0
+  Open WebUI ................ BSD-3-Clause + branding clause (see note *)
+  TripoSR (code + weights) .. MIT
 
-Bundled / orchestrated tools:
-- ComfyUI                     — image generation backend
-- ComfyUI-GGUF (city96)       — GGUF model loading
-- Ultimate SD Upscale         — tiled upscaling
-- ReActor                     — face swapping
-- ComfyUI-LivePortraitKJ      — lip-sync / portrait animation
-- ComfyUI-VideoHelperSuite    — video I/O
-- Ollama                      — local LLM runtime
-- Open WebUI                  — chat dashboard
-- Aider                       — local coding agent
-- Qdrant + fastembed          — Code-RAG / semantic search
-- TripoSR / Hunyuan3D         — image-to-3D
+--- COPYLEFT CODE (GPL-3.0) — launched as separate processes, unmodified ---
+  ComfyUI ................... GPL-3.0
+  ComfyUI-VideoHelperSuite .. GPL-3.0
+  ComfyUI_UltimateSDUpscale . GPL-3.0
+  ComfyUI-ReActor (node) .... GPL-3.0   (see NON-COMMERCIAL models below)
+  Vulture launches these unmodified as separate processes; Vulture's own code
+  stays MIT (mere aggregation). Each project's source is fetched from its
+  upstream repository at install time.
 
-Models (downloaded by the user, each under its own license):
-- FLUX (Black Forest Labs), Stable Diffusion 1.5 checkpoints,
-  Qwen / DeepSeek / other LLMs, 4x-UltraSharp, inswapper + buffalo_l,
-  LivePortrait weights, and others.
+--- MODEL WEIGHTS: COMMERCIAL-OK ---
+  FLUX.1-schnell (DEFAULT) .. Apache-2.0  (weights + outputs commercial OK)
+  SD1.5 checkpoints
+   (DreamShaper / Realistic Vision / ToonYou) .. CreativeML OpenRAIL-M
+     (commercial OK, subject to the license's use-restrictions and any
+      per-model addendum — verify on each model's page)
+  qwen2.5-coder ............. Apache-2.0
+  qwen3 / qwen3.5 ........... Apache-2.0
+  deepseek-r1 ............... MIT
+  BAAI/bge-small-en-v1.5 .... MIT
 
-IMPORTANT: Several of these models/tools carry their own licenses, and some are
-NON-COMMERCIAL. Review each project's license before any commercial use.
+--- MODEL WEIGHTS: NON-COMMERCIAL / RESTRICTED (read before commercial use) ---
+  InsightFace inswapper_128.onnx + buffalo_l (ReActor face-swap) . NON-COMMERCIAL
+       "available for non-commercial research purposes only"
+  CodeFormer (ReActor face restore) ..... S-Lab License 1.0 — NON-COMMERCIAL
+  4x-UltraSharp (default upscaler) ...... CC-BY-NC-SA-4.0 — NON-COMMERCIAL
+       (swap in a permissive ESRGAN model for commercial upscaling)
+  FLUX.1-dev (optional, NOT the default)  FLUX.1 [dev] Non-Commercial License
+  LivePortrait (KJ) ..................... code/weights MIT, but ships with
+       InsightFace (NON-COMMERCIAL); replace with MediaPipe for commercial use
+  Hunyuan3D-2 (Tencent) ................. Tencent Hunyuan Community License:
+       commercial OK only if under 1,000,000 monthly active users AND not in
+       the EU, UK, or South Korea
+
+(*) Open WebUI note: the "Open WebUI" name and logo must remain visible in any
+    deployment with more than 50 end users in a rolling 30-day period, unless
+    you have written permission or an enterprise license. Vulture does not
+    remove Open WebUI branding.
+
+Vulture AI's own launcher/UI code is licensed under MIT (see LICENSE).
+This NOTICE is informational, not legal advice — verify each project's current
+license before any commercial use.

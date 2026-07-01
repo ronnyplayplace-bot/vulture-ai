@@ -187,6 +187,8 @@
       "target_relative_path": "upscale_models/4x-UltraSharp.pth",
       "approx_size_mb": 67,
       "license_note": "Free to use with credit (Kim2091).",
+      "license": "CC-BY-NC-SA-4.0",
+      "noncommercial": true,
       "required": true
     },
 
@@ -197,6 +199,8 @@
       "target_relative_path": "insightface/inswapper_128.onnx",
       "approx_size_mb": 530,
       "license_note": "InsightFace -- NON-COMMERCIAL / research use only.",
+      "license": "InsightFace non-commercial",
+      "noncommercial": true,
       "required": false
     },
     {
@@ -206,6 +210,8 @@
       "target_relative_path": "insightface/models/buffalo_l",
       "approx_size_mb": 289,
       "license_note": "InsightFace -- NON-COMMERCIAL / research use only. Zip is extracted into models/buffalo_l/.",
+      "license": "InsightFace non-commercial",
+      "noncommercial": true,
       "required": false
     },
     {
@@ -215,6 +221,8 @@
       "target_relative_path": "facerestore_models/codeformer.pth",
       "approx_size_mb": 360,
       "license_note": "S-Lab License 1.0 -- NON-COMMERCIAL. Used for edge smoothing after face-swap.",
+      "license": "S-Lab License 1.0 (non-commercial)",
+      "noncommercial": true,
       "required": false
     },
 
@@ -225,6 +233,8 @@
       "target_relative_path": "liveportrait",
       "approx_size_mb": 1300,
       "license_note": "LivePortrait (KwaiVGI) -- research use; MIT wrapper. The KJ node can also auto-download these on first run.",
+      "license": "MIT weights, ships non-commercial InsightFace",
+      "noncommercial": true,
       "required": false
     },
 
