@@ -816,10 +816,12 @@ def _seed_webui_function(live: Config, venv_py: str, webui_data: str) -> None:
     env.update({
         "DATA_DIR": webui_data,
         "OLLAMA_BASE_URL": live.ollama_api or "http://127.0.0.1:11434",
-        # ENABLE_SIGNUP=True only for this transient warm-boot, so the very first
-        # admin@localhost account can be provisioned on a fresh DB (the runtime
-        # launcher keeps signup off). DEFAULT_USER_ROLE=admin -> first user is admin.
+        # WEBUI_ADMIN_EMAIL/PASSWORD => the server bootstraps this admin at startup
+        # on a fresh DB (deterministic, independent of WEBUI_AUTH). ENABLE_SIGNUP=True
+        # only for this transient warm-boot so the signup fallback can create the
+        # first admin if needed (the runtime launcher keeps signup off).
         "WEBUI_AUTH": "False", "ENABLE_SIGNUP": "True", "DEFAULT_USER_ROLE": "admin",
+        "WEBUI_ADMIN_EMAIL": "admin@localhost", "WEBUI_ADMIN_PASSWORD": "admin",
         "DEFAULT_MODELS": live.coder_model or "qwen2.5-coder:7b",
         "GLOBAL_LOG_LEVEL": "WARNING", "DO_NOT_TRACK": "true", "SCARF_NO_ANALYTICS": "true",
     })
@@ -844,22 +846,36 @@ def _seed_webui_function(live: Config, venv_py: str, webui_data: str) -> None:
         if not up:
             warn("Open WebUI did not come up in time -- skipped pre-config (UI still works).")
             return
-        token = _api("POST", "/api/v1/auths/signin",
-                     body={"email": "admin@localhost", "password": "admin"}).get("token")
+        # Get an admin token, robust to a fresh vs seeded DB: try signin (works when
+        # admin@localhost already exists / WEBUI_AUTH=False auto-creates), else fall
+        # back to signup (first user on a fresh DB is force-promoted to admin). Both
+        # may 400/403; tolerate that instead of raising.
+        def _try(path, body):
+            try:
+                return _api("POST", path, body=body).get("token")
+            except Exception:
+                return None
+        creds = {"email": "admin@localhost", "password": "admin"}
+        token = _try("/api/v1/auths/signin", creds)
+        if not token:
+            token = _try("/api/v1/auths/signup", {"name": "Admin", **creds})
+        if not token:
+            token = _try("/api/v1/auths/signin", creds)  # signup may have created it
         if not token:
             warn("could not obtain an Open WebUI admin token -- skipped filter import.")
             return
-        try:  # idempotent: already imported?
-            _api("GET", "/api/v1/functions/id/ai_memory", token=token)
+        # Use create itself as the idempotency signal (a by-id GET returns 401, not
+        # 404, for a missing function -- unreliable). On a fresh install create
+        # succeeds -> then enable + make global. On a re-run it fails because the id
+        # exists -> it's already configured, so leave the toggles alone.
+        content = filt.read_text(encoding="utf-8")
+        try:
+            _api("POST", "/api/v1/functions/create", token=token, body={
+                "id": "ai_memory", "name": "Chat Memory (local RAG)", "content": content,
+                "meta": {"description": "Local RAG long-term chat memory", "manifest": {}}})
+        except _ue.HTTPError:
             ok("Open WebUI chat-memory filter already present.")
             return
-        except _ue.HTTPError as e:
-            if e.code != 404:
-                raise
-        content = filt.read_text(encoding="utf-8")
-        _api("POST", "/api/v1/functions/create", token=token, body={
-            "id": "ai_memory", "name": "Chat Memory (local RAG)", "content": content,
-            "meta": {"description": "Local RAG long-term chat memory", "manifest": {}}})
         _api("POST", "/api/v1/functions/id/ai_memory/toggle", token=token)
         _api("POST", "/api/v1/functions/id/ai_memory/toggle/global", token=token)
         ok("Open WebUI pre-configured: default model + chat-memory filter enabled.")
