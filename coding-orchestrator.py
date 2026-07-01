@@ -1,9 +1,9 @@
-# OVRLKD Auto-Splitter fuer den Coding-Agenten.
-# EIN grosser Prompt rein -> Planer-Modell zerlegt in kleine Schritte ->
-# Aider arbeitet sie automatisch nacheinander ab (jeder Schritt klein = kein Token-Crash,
-# keine weggekuerzten Inhalte). Kein Mini-Schnippsel-Tippen noetig.
+# OVRLKD auto-splitter for the coding agent.
+# ONE big prompt in -> the planner model breaks it into small steps ->
+# Aider works through them one after another automatically (each step small = no token crash,
+# no truncated content). No tiny-snippet typing needed.
 #
-# Aufruf: python coding-orchestrator.py "<projektordner>" "<aufgabe>" [coder-modell] [planer-modell]
+# Usage: python coding-orchestrator.py "<project folder>" "<task>" [coder-model] [planner-model]
 import sys, os, json, subprocess, urllib.request, re
 
 # Portable paths/ports from the shared config (auto-detect + config.json).
@@ -33,37 +33,37 @@ def list_files(proj):
     return files
 
 def _fallback_plan(task, files):
-    # Wenn der Planer kein gueltiges JSON liefert: simpler Datei-weiser Notfall-Plan
-    # (immer noch klein-schrittig = lieber das als ein Mammut-Edit).
+    # If the planner returns no valid JSON: a simple file-by-file emergency plan
+    # (still small-step = better this than one mammoth edit).
     steps=[]
     for f in files:
-        steps.append({"title":f"Aufgabe auf {f} anwenden","files":[f],
-            "instruction":f"Wende folgende Aufgabe NUR auf {f} an, soweit fuer diese Datei sinnvoll. "
-                          f"Aendere chirurgisch, behalte alle bestehenden Inhalte. Aufgabe: {task}"})
+        steps.append({"title":f"Apply task to {f}","files":[f],
+            "instruction":f"Apply the following task ONLY to {f}, as far as it makes sense for this file. "
+                          f"Change surgically, keep all existing content. Task: {task}"})
     return steps
 
 def plan(planner, task, files):
-    system = ("/no_think Du bist ein Senior-Software-Architekt. Zerlege eine Coding-Aufgabe in eine GEORDNETE Liste "
-        "KLEINER, in sich abgeschlossener Schritte. REGELN: jeder Schritt betrifft moeglichst WENIGE Dateien "
-        "(idealerweise EINE). Jeder Schritt ist EINE fokussierte Aenderung. Maximal 3-8 Schritte. "
-        "Aenderungen sind CHIRURGISCH/ergaenzend - niemals eine ganze Datei von Grund auf neu schreiben, "
-        "niemals bestehende Inhalte loeschen ausser es ist ausdruecklich gefordert. "
-        "Antworte AUSSCHLIESSLICH mit einem JSON-Array, kein Fliesstext, kein Markdown, keine Erklaerung: "
-        '[{"title":"kurz","files":["styles.css"],"instruction":"praezise Anweisung; erwaehne dass der Rest unangetastet bleibt"}]')
-    prompt = f"Projekt-Dateien: {files}\n\nAufgabe:\n{task}\n\nGib jetzt NUR das JSON-Array aus."
+    system = ("/no_think You are a senior software architect. Break a coding task into an ORDERED list "
+        "of SMALL, self-contained steps. RULES: each step touches as FEW files as possible "
+        "(ideally ONE). Each step is ONE focused change. At most 3-8 steps. "
+        "Changes are SURGICAL/additive - never rewrite an entire file from scratch, "
+        "never delete existing content unless it is explicitly requested. "
+        "Reply EXCLUSIVELY with a JSON array, no prose, no markdown, no explanation: "
+        '[{"title":"short","files":["styles.css"],"instruction":"precise instruction; mention that the rest stays untouched"}]')
+    prompt = f"Project files: {files}\n\nTask:\n{task}\n\nNow output ONLY the JSON array."
     try:
         raw = ollama_gen(planner, system, prompt)
     except Exception as e:
-        print(f"  (Planer nicht erreichbar: {e} - nutze Notfall-Plan)"); return _fallback_plan(task, files)
+        print(f"  (planner unreachable: {e} - using the emergency plan)"); return _fallback_plan(task, files)
     raw = raw.strip()
     raw = re.sub(r"^```[a-zA-Z]*\s*","",raw); raw = re.sub(r"```$","",raw).strip()
     m = re.search(r"\[.*\]", raw, re.DOTALL)
     if m: raw = m.group(0)
     try:
         steps = json.loads(raw)
-        if not isinstance(steps,list) or not steps: raise ValueError("leer")
+        if not isinstance(steps,list) or not steps: raise ValueError("empty")
     except Exception:
-        print("  (Planer-Antwort war kein gueltiges JSON - nutze Notfall-Plan)")
+        print("  (planner reply was not valid JSON - using the emergency plan)")
         return _fallback_plan(task, files)
     clean=[]
     for s in steps:
@@ -71,7 +71,7 @@ def plan(planner, task, files):
         sf=[f for f in s.get("files",[]) if f in files]
         instr=s.get("instruction","") or s.get("title","")
         if not instr: continue
-        clean.append({"title":s.get("title","Schritt"),"files":sf or files,"instruction":instr})
+        clean.append({"title":s.get("title","Step"),"files":sf or files,"instruction":instr})
     return clean or _fallback_plan(task, files)
 
 def run_step(coder, proj, files, instruction):
@@ -88,32 +88,32 @@ def run_step(coder, proj, files, instruction):
 
 def main():
     if len(sys.argv)<3:
-        print('Aufruf: coding-orchestrator.py "<ordner>" "<aufgabe>" [coder] [planer]'); return
+        print('Usage: coding-orchestrator.py "<folder>" "<task>" [coder] [planner]'); return
     proj=sys.argv[1]; task=sys.argv[2]
     coder=sys.argv[3] if len(sys.argv)>3 else "ollama_chat/qwen2.5-coder:7b"
     planner=sys.argv[4] if len(sys.argv)>4 else "qwen2.5-coder:7b"
-    if not os.path.isdir(proj): print("Ordner nicht gefunden:",proj); return
+    if not os.path.isdir(proj): print("Folder not found:",proj); return
     files=list_files(proj)
-    if not files: print("Keine Code-Dateien gefunden."); return
-    print(f"[Auto-Splitter] Projekt: {proj}")
-    print(f"[Auto-Splitter] {len(files)} Dateien: {files}")
-    print(f"[Planer: {planner}] zerlege Aufgabe in Schritte...")
+    if not files: print("No code files found."); return
+    print(f"[Auto-splitter] Project: {proj}")
+    print(f"[Auto-splitter] {len(files)} files: {files}")
+    print(f"[Planner: {planner}] breaking the task into steps...")
     try:
         steps=plan(planner, task, files)
     except Exception as e:
-        print("Planer-Fehler (kein gueltiges JSON):",e); return
-    if not steps: print("Planer lieferte keine Schritte."); return
-    print(f"\n[Plan] {len(steps)} Schritte:")
+        print("Planner error (no valid JSON):",e); return
+    if not steps: print("Planner returned no steps."); return
+    print(f"\n[Plan] {len(steps)} steps:")
     for i,s in enumerate(steps,1): print(f"  {i}. {s['title']}  -> {s['files']}")
-    print(f"\n[Coder: {coder}] arbeite Schritte ab...\n")
+    print(f"\n[Coder: {coder}] working through the steps...\n")
     ok=0
     for i,s in enumerate(steps,1):
-        print(f"=== Schritt {i}/{len(steps)}: {s['title']}  ({s['files']}) ===")
+        print(f"=== Step {i}/{len(steps)}: {s['title']}  ({s['files']}) ===")
         rc,applied,limit=run_step(coder, proj, s['files'], s['instruction'])
-        status = "OK (Edit angewendet)" if applied else ("TOKEN-LIMIT!" if limit else f"kein Edit (rc={rc})")
+        status = "OK (edit applied)" if applied else ("TOKEN LIMIT!" if limit else f"no edit (rc={rc})")
         if applied: ok+=1
         print(f"   -> {status}\n")
-    print(f"[Fertig] {ok}/{len(steps)} Schritte angewendet.")
+    print(f"[Done] {ok}/{len(steps)} steps applied.")
 
 if __name__=="__main__":
     main()

@@ -1,5 +1,5 @@
-# Auto-Tune: erkennt GPU-VRAM + Architektur, setzt num_ctx pro Modell passend.
-# Laeuft bei jedem KI-Coder-Start -> GPU getauscht = automatisch mehr Kontext.
+# Auto-tune: detects GPU VRAM + architecture, sets num_ctx per model accordingly.
+# Runs on every KI-Coder start -> swap the GPU = automatically more context.
 import subprocess, os
 
 SETTINGS = os.path.join(os.path.expanduser("~"), ".aider.model.settings.yml")
@@ -16,14 +16,14 @@ def gpu_info():
         return 6.0, 6.1  # Fallback: 1060
 
 def tier(vram, cap):
-    pascal = cap < 7.0  # Pascal (1060/1080Ti) -> FlashAttention-Crash bei langem Kontext
+    pascal = cap < 7.0  # Pascal (1060/1080Ti) -> FlashAttention crash on long context
     if vram <= 7:   t = "s"
     elif vram <= 13: t = "m"
     elif vram <= 17: t = "l"
     else:            t = "xl"
     return t, pascal
 
-# num_ctx je Modell und VRAM-Stufe (s=6GB, m=12GB, l=16GB, xl=24GB+)
+# num_ctx per model and VRAM tier (s=6GB, m=12GB, l=16GB, xl=24GB+)
 CTX = {
  "qwen3.5:9b":       {"s":12288,"m":24576,"l":32768,"xl":32768},
  "qwen3.5:4b":       {"s":16384,"m":32768,"l":32768,"xl":32768},
@@ -37,11 +37,11 @@ EXTRA = {  # use_repo_map / phi etc.
 
 def build(vram, cap):
     t, pascal = tier(vram, cap)
-    lines = [f"# OVRLKD Aider Modell-Settings - AUTO-getunt fuer {vram:.0f}GB VRAM (cap {cap}){' [Pascal-Cap]' if pascal else ''}",
-             "# Wird bei jedem KI-Coder-Start neu generiert (auto-tune-ctx.py). Nicht von Hand editieren.\n"]
+    lines = [f"# OVRLKD Aider model settings - AUTO-tuned for {vram:.0f}GB VRAM (cap {cap}){' [Pascal cap]' if pascal else ''}",
+             "# Regenerated on every KI-Coder start (auto-tune-ctx.py). Do not edit by hand.\n"]
     for model, sizes in CTX.items():
         ctx = sizes[t]
-        if pascal: ctx = min(ctx, 12288)  # Pascal-FA-Crash-Schutz
+        if pascal: ctx = min(ctx, 12288)  # Pascal FA-crash guard
         block = [f"- name: ollama_chat/{model}",
                  "  edit_format: whole",
                  "  use_repo_map: true",
@@ -57,5 +57,5 @@ if __name__ == "__main__":
     with open(SETTINGS,"w",encoding="utf-8") as f:
         f.write(build(vram, cap))
     t,pascal = tier(vram,cap)
-    print(f"Auto-Tune: {vram:.0f}GB VRAM, cap {cap} -> Stufe '{t}'{' (Pascal-Cap 12K)' if pascal else ''}")
-    print(f"num_ctx gesetzt: qwen3.5:9b={min(CTX['qwen3.5:9b'][t],12288 if pascal else 99999)}, qwen3.5:4b={min(CTX['qwen3.5:4b'][t],12288 if pascal else 99999)}")
+    print(f"Auto-tune: {vram:.0f}GB VRAM, cap {cap} -> tier '{t}'{' (Pascal cap 12K)' if pascal else ''}")
+    print(f"num_ctx set: qwen3.5:9b={min(CTX['qwen3.5:9b'][t],12288 if pascal else 99999)}, qwen3.5:4b={min(CTX['qwen3.5:4b'][t],12288 if pascal else 99999)}")

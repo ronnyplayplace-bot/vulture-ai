@@ -78,7 +78,7 @@ needed, listed for completeness): **264, 341, 487, 491, 495, 510, 579, 676, 678,
 | Line | Current literal | Replace with |
 |------|-----------------|--------------|
 | 10  | `COMFY_API = "http://127.0.0.1:8188"` | `COMFY_API = cfg.comfy_api` |
-| 15  | `SERVICES = {"Ollama":11434, "Chat/Bilder (WebUI)":8080, "ComfyUI/FLUX":8188, "Code-RAG":8001, "VPS-Tunnel":8000}` | `SERVICES = cfg.services` |
+| 15  | `SERVICES = {"Ollama":11434, "Chat/Images (WebUI)":8080, "ComfyUI/FLUX":8188, "Code-RAG":8001, "VPS-Tunnel":8000}` | `SERVICES = cfg.services` |
 | 40  | `s.connect_ex(("127.0.0.1", p))` | `s.connect_ex((cfg.host, p))` |
 | 47  | `if not port_open(8188)` | `if not port_open(cfg.comfy_port)` |
 | 54  | `f"{COMFY_API}/free"` | unchanged (COMFY_API now from cfg) |

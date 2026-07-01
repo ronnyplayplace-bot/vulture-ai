@@ -32,18 +32,18 @@ SERVICES = cfg.services
 
 NEG = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, worst quality, low quality, jpeg artifacts, signature, watermark, blurry, ugly, deformed, mutated"
 
-# Modell -> (engine, datei)  -- FLUX ist Standard (beste Qualitaet)
+# Model -> (engine, file)  -- FLUX is the default (best quality)
 MODELS = {
     "FLUX  (best quality)":            ("flux", cfg.model_flux_unet),
     "DreamShaper  (fast/draft)":       ("sd15", "DreamShaper_v8.safetensors"),
     "Realistic Vision  (photo, fast)": ("sd15","RealisticVision_v6.safetensors"),
     "ToonYou  (cartoon, fast)":        ("sd15", "ToonYou_v6.safetensors"),
 }
-# Zusatz fuer Charakter-Modus (3D/Rigging): A-Pose, ganzer Koerper, gerade
+# Suffix for character mode (3D/rigging): A-pose, full body, straight
 CHAR_SUFFIX = (", full body character, standing straight in A-pose, arms slightly "
     "away from body, front view, symmetrical, neutral pose, full figure from head to toe, "
     "character reference sheet, plain solid grey background, even lighting, T-pose")
-# (Basis-Aufloesung, Hi-Res-Faktor) -> Endergebnis ist Basis * Faktor
+# (base resolution, hi-res factor) -> final result is base * factor
 SIZES = {
     "Square HD (1024x1024)":    (512,512,2.0),
     "Portrait HD (1024x1536)":  (512,768,2.0),
@@ -66,7 +66,7 @@ def ensure_comfy():
     return True
 
 def free_memory():
-    # ComfyUI neu starten = RAM wirklich frei (Torch gibt sonst nichts zurueck)
+    # Restarting ComfyUI actually frees the RAM (Torch gives nothing back otherwise)
     try: urllib.request.urlopen(urllib.request.Request(f"{COMFY_API}/free",data=b'{"unload_models":true,"free_memory":true}',headers={"Content-Type":"application/json"}),timeout=5)
     except: pass
     run_hidden(f'powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort {cfg.comfy_port} -State Listen -EA SilentlyContinue | %% {{ Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }}"')
@@ -80,7 +80,7 @@ def start_webui_and_open():
     if not port_open(cfg.webui_port): run_hidden(f'"{os.path.join(cfg.tools_dir, "start-webui.cmd")}"')
     webbrowser.open(cfg.webui_url)
 def _open_cmd(path):
-    # zuverlaessig ein Konsolenfenster oeffnen (os.startfile startet .cmd im eigenen Fenster)
+    # reliably open a console window (os.startfile launches the .cmd in its own window)
     try: os.startfile(path)
     except Exception:
         subprocess.Popen(f'start "OVRLKD" "{path}"', shell=True)
@@ -102,13 +102,13 @@ def wf_sd15(model, prompt, w, h, seed, hires=2.0):
       "9":{"inputs":{"filename_prefix":"studio","images":["8",0]},"class_type":"SaveImage"},
     }
     if hires and hires>1.0:
-        # Hi-Res-Fix: 2x Latent-Upscale + zweiter Sampler-Pass (echte Details)
+        # Hi-res fix: 2x latent upscale + second sampler pass (real detail)
         wf["10"]={"inputs":{"samples":["3",0],"scale_by":hires},"class_type":"LatentUpscaleBy"}
         wf["11"]={"inputs":{"seed":seed,"steps":16,"cfg":7,"sampler_name":"dpmpp_2m","scheduler":"karras","denoise":0.45,"model":["4",0],"positive":["6",0],"negative":["7",0],"latent_image":["10",0]},"class_type":"KSampler"}
         wf["8"]["inputs"]["samples"]=["11",0]
     return wf
 def wf_flux(prompt, w, h, seed):
-    # Pascal-Optimierung: nutzt t5 Q8-GGUF wenn vorhanden (besser als fp8), sonst fp8-Fallback
+    # Pascal optimisation: use the t5 Q8 GGUF if present (better than fp8), else fp8 fallback
     t5gguf=cfg.flux_t5_gguf_path()
     if os.path.exists(t5gguf) and os.path.getsize(t5gguf)>1000000:
         clip_node={"inputs":{"clip_name1":cfg.model_flux_t5_gguf,"clip_name2":cfg.model_flux_clip_l,"type":"flux"},"class_type":"DualCLIPLoaderGGUF"}
@@ -130,7 +130,7 @@ def wf_flux(prompt, w, h, seed):
     }
 
 def wf_img2img(infile, prompt, ckpt, denoise, seed):
-    # Bild -> Bild (Variation/Umgestaltung) - native SD1.5 Nodes, laeuft auf 6GB
+    # Image -> image (variation/reshape) - native SD1.5 nodes, runs on 6GB
     return {
       "1":{"inputs":{"image":infile,"upload":"image"},"class_type":"LoadImage"},
       "4":{"inputs":{"ckpt_name":ckpt},"class_type":"CheckpointLoaderSimple"},
@@ -162,7 +162,7 @@ def run_img2img(src_path, prompt, denoise, on_status, on_image):
         on_status(f"Image→Image error: {e}")
 
 def wf_upscale(infile, scale, ckpt, seed):
-    # 4x-UltraSharp + Ultimate SD Upscale (SD1.5 refine, tiled) -> echtes 4K-Detail auf 6GB
+    # 4x-UltraSharp + Ultimate SD Upscale (SD1.5 refine, tiled) -> real 4K detail on 6GB
     return {
       "1":{"inputs":{"image":infile,"upload":"image"},"class_type":"LoadImage"},
       "2":{"inputs":{"ckpt_name":ckpt},"class_type":"CheckpointLoaderSimple"},
@@ -188,7 +188,7 @@ def run_upscale(src_path, scale, on_status, on_image):
         for _ in range(60):
             if port_open(cfg.comfy_port): break
             time.sleep(2)
-        # ComfyUI laedt LoadImage aus input/ -> Bild dorthin kopieren
+        # ComfyUI loads LoadImage from input/ -> copy the image there
         inp=cfg.comfy_input_dir; os.makedirs(inp,exist_ok=True)
         fn="to_upscale.png"; shutil.copy(src_path, os.path.join(inp,fn))
         seed=random.randint(0,2**31)
@@ -200,7 +200,7 @@ def run_upscale(src_path, scale, on_status, on_image):
         on_status(f"Upscale error: {e}")
 
 def wf_faceswap(target_file, source_file, restore_model="codeformer.pth", visibility=1.0):
-    # ReActor Face-Swap: Gesicht aus source_file -> auf target_file. Laeuft offline (inswapper_128 + buffalo_l).
+    # ReActor face swap: face from source_file -> onto target_file. Runs offline (inswapper_128 + buffalo_l).
     return {
       "1":{"inputs":{"image":target_file,"upload":"image"},"class_type":"LoadImage"},
       "2":{"inputs":{"image":source_file,"upload":"image"},"class_type":"LoadImage"},
@@ -214,7 +214,7 @@ def wf_faceswap(target_file, source_file, restore_model="codeformer.pth", visibi
       "9":{"inputs":{"filename_prefix":"faceswap","images":["3",0]},"class_type":"SaveImage"},
     }
 
-# Glaettungs-Stufe -> (CodeFormer-Modell, Sichtbarkeit)
+# Smoothing level -> (CodeFormer model, visibility)
 SWAP_RESTORE = {"none":("none",0.0), "light":(cfg.model_restore,0.5), "strong":(cfg.model_restore,1.0)}
 
 def run_faceswap(target_path, source_path, restore_key, on_status, on_image):
@@ -239,7 +239,7 @@ def run_faceswap(target_path, source_path, restore_key, on_status, on_image):
         on_status(f"Face swap error: {e}")
 
 def wf_lipsync(source_file, driving_file, expressiveness=1.0):
-    # LivePortrait: Mimik/Lippen aus driving_file (Video) -> auf source_file (Foto). Ton wird durchgeschleift.
+    # LivePortrait: expressions/lips from driving_file (video) -> onto source_file (photo). Audio is passed through.
     return {
       "1":{"inputs":{"precision":"auto","mode":"human"},"class_type":"DownloadAndLoadLivePortraitModels"},
       "2":{"inputs":{"onnx_device":"CUDA","keep_model_loaded":True,"detection_threshold":0.5},"class_type":"LivePortraitLoadCropper"},
@@ -257,7 +257,7 @@ def wf_lipsync(source_file, driving_file, expressiveness=1.0):
     }
 
 def comfy_run_video(wf, on_status, label="Lip sync"):
-    # wie comfy_run, aber holt am Ende eine Video-Datei (gifs/videos) aus der History
+    # like comfy_run, but at the end fetches a video file (gifs/videos) from the history
     cid=str(random.randint(1,2**31))
     try:
         pid=json.loads(urllib.request.urlopen(urllib.request.Request(f"{COMFY_API}/prompt",
@@ -302,14 +302,14 @@ def run_lipsync(source_path, driving_path, expressiveness, on_status, on_done):
         on_status(f"Lip sync error: {e}")
 
 def enhance_prompt(user_text):
-    # Lokale KI (qwen) macht aus lockerem/deutschem Text einen guten englischen FLUX-Prompt
+    # Local AI (qwen) turns casual/German text into a good English FLUX prompt
     sys=("You are an expert text-to-image prompt engineer for FLUX. Convert the user's request "
          "(any language, may be casual) into ONE concise vivid ENGLISH image description. "
          "Describe ONLY what should be visible: subject, setting, style, lighting, mood, details. "
          "No instructions like 'create/make', no aspect ratio, no quotes, no explanation, no thinking. "
          "Output ONLY the final prompt as a single line.")
     body=json.dumps({"model":cfg.enhance_model,"prompt":user_text,"system":sys,"stream":False,
-                     "keep_alive":0,  # Modell sofort aus VRAM entladen -> Platz fuer FLUX (6GB!)
+                     "keep_alive":0,  # unload the model from VRAM immediately -> room for FLUX (6GB!)
                      "options":{"temperature":0.6,"num_predict":300}}).encode()
     req=urllib.request.Request(f"{cfg.ollama_api}/api/generate",data=body,headers={"Content-Type":"application/json"})
     out=json.loads(urllib.request.urlopen(req,timeout=150).read()).get("response","")
@@ -318,7 +318,7 @@ def enhance_prompt(user_text):
     return out
 
 def comfy_run(wf, on_status, label="Generating"):
-    # Sendet Workflow + zeigt LIVE-Prozent via Websocket, gibt Bildpfad zurueck
+    # Sends the workflow + shows LIVE percent via websocket, returns the image path
     import websocket as _ws
     cid=str(random.randint(1,2**31))
     pid=json.loads(urllib.request.urlopen(urllib.request.Request(f"{COMFY_API}/prompt",
@@ -329,7 +329,7 @@ def comfy_run(wf, on_status, label="Generating"):
         ws=None
     done=False; t0=time.time()
     while not done:
-        if time.time()-t0>2400: break  # 40min Limit (Upscale auf 6GB mit vielen Kacheln dauert)
+        if time.time()-t0>2400: break  # 40min limit (upscaling on 6GB with many tiles takes a while)
         if ws is None: time.sleep(2)
         else:
             try:
@@ -342,7 +342,7 @@ def comfy_run(wf, on_status, label="Generating"):
                         done=True
             except Exception:
                 pass
-        # Fallback: History pruefen
+        # Fallback: check the history
         try:
             h=json.loads(urllib.request.urlopen(f"{COMFY_API}/history/{pid}",timeout=8).read())
             if pid in h and h[pid].get("outputs"): done=True
@@ -365,7 +365,7 @@ def generate(engine, model_file, prompt, w, h, hires, on_status, on_image):
                 if port_open(cfg.comfy_port): break
                 time.sleep(2)
             time.sleep(3)
-        # FLUX-Dateien da?
+        # FLUX files present?
         if engine=="flux":
             need=cfg.flux_required_files()
             if not all(os.path.exists(p) and os.path.getsize(p)>1000000 for p in need):
@@ -410,7 +410,7 @@ btn_f=tkfont.Font(family="Segoe UI",size=13,weight="bold")
 sub_f=tkfont.Font(family="Segoe UI",size=9); small_f=tkfont.Font(family="Segoe UI",size=9)
 bar_f=tkfont.Font(family="Segoe UI",size=10,weight="bold")
 
-# ---- Frameless custom chrome: eigene, flache Titelleiste (kein natives Fenster-Chrome) ----
+# ---- Frameless custom chrome: our own flat title bar (no native window chrome) ----
 def make_frameless(win, title, closer):
     win.configure(bg=BG)
     win.overrideredirect(True)
@@ -419,7 +419,7 @@ def make_frameless(win, title, closer):
     win.configure(highlightthickness=1, highlightbackground=ACCENT_DK, highlightcolor=ACCENT_DK)
     st={"maxed": False, "geo": None, "min": False}
     def do_min():
-        # overrideredirect-Fenster lassen sich nicht direkt iconifizieren -> Rahmen kurz an, iconify, beim Remap wieder aus
+        # overrideredirect windows cannot be iconified directly -> briefly restore the frame, iconify, turn it off again on remap
         st["min"]=True
         win.overrideredirect(False); win.update_idletasks(); win.iconify()
     def _remap(e=None):
@@ -457,7 +457,7 @@ def make_frameless(win, title, closer):
         wdg.bind("<ButtonPress-1>", _press); wdg.bind("<B1-Motion>", _move)
     return bar
 
-# ---- Dezenter Support-Dialog (Krypto-Adressen kopieren) ----
+# ---- Subtle support dialog (copy crypto addresses) ----
 def open_support_window():
     win=tk.Toplevel(root); win.title("OVRLKD - Support"); win.geometry("440x400")
     win.lift(); win.focus_force()
@@ -481,14 +481,14 @@ def open_support_window():
 
 make_frameless(root, "VULTURE AI", root.destroy)
 
-# ---- Kopfzeile ----
+# ---- Header ----
 head=tk.Frame(root,bg=BG); head.pack(fill="x",padx=24,pady=(16,6))
 tk.Label(head,text="VULTURE AI",font=title_f,bg=BG,fg=FG).pack(side="left")
 _by=tk.Label(head,text="  by OVRLKD Studio ↗",font=sub_f,bg=BG,fg=ACCENT_LT,cursor="hand2"); _by.pack(side="left",pady=(10,0))
 _by.bind("<Button-1>",lambda e:webbrowser.open("https://www.overlkd.com"))
 tk.Frame(root,bg=DIV,height=1).pack(fill="x",padx=24,pady=(0,2))
 
-# ---- Fusszeile: rotierender Slogan + dezenter Support-Link ----
+# ---- Footer: rotating slogan + subtle support link ----
 foot=tk.Frame(root,bg=BG); foot.pack(side="bottom",fill="x",padx=24,pady=(0,8))
 slogan_lbl=tk.Label(foot,text=SLOGANS[0],font=small_f,bg=BG,fg=SUB); slogan_lbl.pack(side="left")
 sup_lbl=tk.Label(foot,text="♥ Support",font=small_f,bg=BG,fg=ACCENT_LT,cursor="hand2"); sup_lbl.pack(side="right")
@@ -498,7 +498,7 @@ def _rotate_slogan(i=0):
     root.after(6000, lambda:_rotate_slogan(i+1))
 root.after(6000,_rotate_slogan)
 
-# ---- Koerper: links Aktionen (Raster), rechts Status ----
+# ---- Body: actions on the left (grid), status on the right ----
 body=tk.Frame(root,bg=BG); body.pack(fill="both",expand=True,padx=20,pady=(4,16))
 left=tk.Frame(body,bg=BG); left.pack(side="left",fill="both",expand=True)
 right=tk.Frame(body,bg=BG,width=210); right.pack(side="right",fill="y",padx=(16,0)); right.pack_propagate(False)
@@ -525,7 +525,7 @@ def make_card(parent,r,c,emoji,text,sub,cmd,base=CARD,fg=FG,h=64):
 for i in range(2): left.columnconfigure(i,weight=1)
 for i in range(5): left.rowconfigure(i,weight=1)
 
-# Start ueber volle Breite
+# Start spans the full width
 make_card(left,0,0,"▶","START ALL","Boot up services",start_all,base=ACCENT,fg="#ffffff").grid(columnspan=2,sticky="nsew")
 make_card(left,1,0,"\U0001f3a8","Create images","Text in, image out",lambda:open_generator())
 make_card(left,1,1,"\U0001f4ac","Chat","Local AI models",start_webui_and_open)
@@ -536,7 +536,7 @@ make_card(left,3,1,"\U0001f4ca","Status","RAM / VRAM / GPU",open_status)
 make_card(left,4,0,"\U0001f3ad","Face swap","Face swap (photo)",lambda:open_faceswap_window())
 make_card(left,4,1,"\U0001f444","Lip sync","Bring a photo to life",lambda:open_lipsync_window())
 
-# ---- Rechte Spalte: Dienste-Status + Speicher/Stop ----
+# ---- Right column: service status + memory/stop ----
 tk.Label(right,text="SERVICES",font=small_f,bg=BG,fg=SUB).pack(anchor="w",pady=(2,4))
 status_labels={}
 for name in SERVICES:
@@ -559,7 +559,7 @@ def refresh():
     root.after(3000,refresh)
 refresh()
 
-# ---------- Bild-Generator Fenster ----------
+# ---------- Image generator window ----------
 def open_generator():
     from PIL import Image, ImageTk
     win=tk.Toplevel(root); win.title("OVRLKD - Create images"); win.configure(bg=BG)
@@ -591,12 +591,12 @@ def open_generator():
         variable=char_var,font=sub_f,bg=BG,fg=FG,selectcolor=CARD,activebackground=BG,activeforeground=FG,anchor="w")
     cb.pack(fill="x",padx=24,pady=(2,0))
 
-    # Buttons ZUERST (immer sichtbar, oben), dann Bild fuellt den Rest
+    # Buttons FIRST (always visible, at the top), then the image fills the rest
     gen_btn=tk.Button(win,text="✨  Generate image",font=btn_f,bg=ACCENT,fg="#ffffff",relief="flat",cursor="hand2",activebackground=ACCENT_DK,activeforeground="#ffffff")
     gen_btn.pack(side="top",fill="x",padx=24,pady=(10,4))
     status_lbl=tk.Label(win,text="Ready.",font=sub_f,bg=BG,fg=GREEN); status_lbl.pack(side="top",pady=(2,4))
 
-    # Unten: Bild gross oeffnen + Ordner
+    # Bottom: open image large + folder
     botf=tk.Frame(win,bg=BG); botf.pack(side="bottom",fill="x",pady=(4,10))
     def open_full():
         if win._last_path and os.path.exists(win._last_path): os.startfile(win._last_path)
@@ -605,7 +605,7 @@ def open_generator():
               command=open_full).pack(side="left",expand=True,fill="x",padx=(24,6))
     tk.Button(botf,text="\U0001f4c1 Folder",font=sub_f,bg=CARD,fg=SUB,relief="flat",cursor="hand2",
               command=lambda:os.startfile(OUTPUT_DIR)).pack(side="left",expand=True,fill="x",padx=(6,24))
-    # Bild->Bild Reihe (Variation/Umgestaltung aus Quellbild + Prompt)
+    # Image->image row (variation/reshape from a source image + prompt)
     i2f=tk.Frame(win,bg=BG); i2f.pack(side="bottom",fill="x",pady=(0,2))
     def do_img2img():
         f=filedialog.askopenfilename(title="Source image for Image→Image",initialdir=OUTPUT_DIR,
@@ -616,7 +616,7 @@ def open_generator():
         threading.Thread(target=lambda:run_img2img(f,p,0.55,set_status,show_image),daemon=True).start()
     tk.Button(i2f,text="\U0001f5bc️ Image→Image (reshape source + prompt)",font=sub_f,bg="#1e1a2e",fg=ACCENT_LT,
               relief="flat",cursor="hand2",command=do_img2img).pack(fill="x",padx=24)
-    # Upscale-Reihe (4x-UltraSharp + Ultimate SD Upscale -> echtes Detail)
+    # Upscale row (4x-UltraSharp + Ultimate SD Upscale -> real detail)
     upf=tk.Frame(win,bg=BG); upf.pack(side="bottom",fill="x",pady=(0,2))
     def do_upscale(scale):
         if not getattr(win,"_last_path",None): set_status("Generate or load an image first."); return
@@ -654,7 +654,7 @@ def open_generator():
             try:
                 win._last_path=path; win._pil=Image.open(path); _rescale()
                 set_status("Done! Saved as "+os.path.basename(path))
-                os.startfile(path)  # oeffnet automatisch im Bildbetrachter
+                os.startfile(path)  # opens automatically in the image viewer
             except Exception as e: set_status(f"Display error: {e}")
         win.after(0,_do)
     win.bind("<Configure>", lambda e: _rescale() if e.widget is win else None)
@@ -679,7 +679,7 @@ def open_generator():
 
     gen_btn.config(command=do_gen)
 
-# ---------- Bild -> 3D Fenster (mit Datei-Auswahl) ----------
+# ---------- Image -> 3D window (with file picker) ----------
 def open_3d_window():
     from PIL import Image, ImageTk
     if not os.path.exists(os.path.join(cfg.tripo_src_dir, "run.py")):
@@ -745,7 +745,7 @@ def open_3d_window():
     tk.Button(win,text="\U0001f4c1 Open 3D folder",font=small_f,bg=CARD,fg=SUB,relief="flat",cursor="hand2",
         command=lambda:os.startfile(cfg.tripo_output_dir) if os.path.exists(cfg.tripo_output_dir) else None).pack(pady=(0,10))
 
-# ---------- Gesicht tauschen (Face-Swap) Fenster ----------
+# ---------- Face swap window ----------
 def open_faceswap_window():
     from PIL import Image, ImageTk
     win=tk.Toplevel(root); win.title("OVRLKD - Face swap"); win.configure(bg=BG)
@@ -816,7 +816,7 @@ def open_faceswap_window():
         threading.Thread(target=worker,daemon=True).start()
     go.config(command=do_swap)
 
-# ---------- Lippen-Sync (LivePortrait) Fenster ----------
+# ---------- Lip sync (LivePortrait) window ----------
 def open_lipsync_window():
     from PIL import Image, ImageTk
     win=tk.Toplevel(root); win.title("OVRLKD - Lip sync"); win.configure(bg=BG)

@@ -115,7 +115,7 @@ Run this to confirm the acceptance test on a clean machine (or a throwaway VM):
 - [ ] `python setup/verify.py --start-comfy` — ComfyUI boots, port opens, the 5
       key node class types register (`UnetLoaderGGUF`, `UltimateSDUpscale`,
       `ReActorFaceSwap`, `LivePortraitProcess`, `VHS_LoadVideo`)
-- [ ] `python studio.py` — window opens, "Alles starten", generate one FLUX image
+- [ ] `python studio.py` — window opens, "START ALL", generate one FLUX image
 - [ ] rerun `python setup/install.py` — proves idempotency: **all `[skip]`**
 
 ### Known manual follow-ups (documented, not silent failures)
