@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo.png" alt="Vulture AI" width="200">
+</p>
+
 # 🦅 Vulture AI
 
 ### by OVRLKD Studio
