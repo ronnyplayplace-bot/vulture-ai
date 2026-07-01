@@ -11,7 +11,7 @@ folders — nothing is bundled and nothing leaves your PC.
 | **Windows 10/11** | the launcher is Windows-first | — |
 | **Python 3.11** (64-bit) | runs the studio + installer | python.org — tick "Add to PATH" |
 | **Git** | clones ComfyUI + custom nodes | git-scm.com |
-| **NVIDIA GPU + current driver + CUDA-capable** | image/video/3D generation | GeForce/Studio driver |
+| **NVIDIA GPU + current driver + CUDA-capable** | image & video generation | GeForce/Studio driver |
 | **Ollama** (desktop app) | local LLMs (chat, prompt optimiser, coding) | ollama.com |
 | **~100 GB free disk** | the models are big — put them on a roomy drive | — |
 
