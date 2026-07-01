@@ -13,6 +13,8 @@ No cloud, no API keys, no subscriptions — nothing leaves your machine.
 
 ---
 
+![OVRLKD Studio — one clean window, every tool in one place, no node spaghetti](docs/screenshot.png)
+
 ## What it is
 
 Every individual AI tool out there is brilliant — but you spend more time gluing
