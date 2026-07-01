@@ -93,9 +93,6 @@ LivePortrait) are personal / research use only — **Vulture never downloads tho
 the file. Everything else installs by default and is fine for commercial use — see
 [NOTICE](NOTICE).
 
-**The full landing page** lives in [`site/`](site/) — double-click `site/index.html`
-(or run `python -m http.server` in that folder) to view it locally.
-
 ## Runs on modest hardware
 
 Most of this runs on a **GTX 1060 6GB**. It's slow on old cards, but it *works*.
