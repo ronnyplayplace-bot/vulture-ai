@@ -768,6 +768,7 @@ def _write_start_webui_cmd(live: Config, venv_dir: str, webui_data: str) -> None
         f'set "OLLAMA_BASE_URL={ollama}"',
         'set "WEBUI_AUTH=False"',
         'set "ENABLE_SIGNUP=False"',
+        'set "DEFAULT_USER_ROLE=admin"',
         'set "DO_NOT_TRACK=true"',
         'set "SCARF_NO_ANALYTICS=true"',
         f'call "{activate}"',
