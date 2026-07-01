@@ -1,0 +1,75 @@
+# ===== OVRLKD Studio .gitignore =====
+# SECURITY FIRST: never commit secrets, keys, personal data, or model weights.
+
+# --- Secrets / credentials (NEVER commit) ---
+*.key
+*.pem
+*.ppk
+id_rsa*
+*_rsa
+*_ed25519
+*.env
+.env*
+secrets*
+rootserver*
+*credentials*
+*secret*
+*token*
+*.pfx
+
+# --- Personal / private data ---
+server/
+photos/
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.mp4
+*.mov
+*.wav
+personal*
+
+# --- Internal planning notes (keep private) ---
+*STAND*.md
+*UPGRADE-PLAN*.md
+*KONSOLIDIERUNG*.md
+ALTE-*.md
+
+# --- AI model weights & big files (users download these separately) ---
+*.safetensors
+*.ckpt
+*.gguf
+*.pth
+*.onnx
+*.bin
+models/
+checkpoints/
+
+# --- Python / venv / build ---
+__pycache__/
+*.pyc
+venv/
+.venv/
+env/
+*.egg-info/
+
+# --- Aider / tool histories ---
+.aider*
+.aider.conf.yml
+.aider.model.settings.yml
+
+# --- Databases / logs / caches ---
+*.db
+*.sqlite*
+*.log
+pip-cache/
+hf-cache/
+.cache/
+
+# --- OS / editor ---
+*.lnk
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

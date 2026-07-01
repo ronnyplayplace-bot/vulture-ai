@@ -1,0 +1,28 @@
+Vulture AI — by OVRLKD Studio
+Copyright (c) 2026 OVRLKD Studio
+
+Vulture AI is a launcher/UI that ties together many excellent open-source
+projects. It does not redistribute their code or model weights — it installs and
+runs them on the user's machine. All credit for the underlying capabilities goes
+to these projects and their authors. Please support them.
+
+Bundled / orchestrated tools:
+- ComfyUI                     — image generation backend
+- ComfyUI-GGUF (city96)       — GGUF model loading
+- Ultimate SD Upscale         — tiled upscaling
+- ReActor                     — face swapping
+- ComfyUI-LivePortraitKJ      — lip-sync / portrait animation
+- ComfyUI-VideoHelperSuite    — video I/O
+- Ollama                      — local LLM runtime
+- Open WebUI                  — chat dashboard
+- Aider                       — local coding agent
+- Qdrant + fastembed          — Code-RAG / semantic search
+- TripoSR / Hunyuan3D         — image-to-3D
+
+Models (downloaded by the user, each under its own license):
+- FLUX (Black Forest Labs), Stable Diffusion 1.5 checkpoints,
+  Qwen / DeepSeek / other LLMs, 4x-UltraSharp, inswapper + buffalo_l,
+  LivePortrait weights, and others.
+
+IMPORTANT: Several of these models/tools carry their own licenses, and some are
+NON-COMMERCIAL. Review each project's license before any commercial use.
