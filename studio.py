@@ -28,6 +28,8 @@ SUPPORT = [("BTC", "37W7Djk14P9kw3Gx3zWLNXpTyRcSJfrwSe"),
            ("ETH", "0x30d7d100fe6606a0860786dacb975c7f7723852c"),
            ("USDT (BEP20)", "0x30d7d100fe6606a0860786dacb975c7f7723852c")]
 SUPPORT_URL = "https://github.com/ronnyplayplace-bot/vulture-ai"
+GAME_NAME = "By My Side"
+GAME_URL = "https://store.steampowered.com/app/4859700/By_My_Side/"
 
 SERVICES = cfg.services
 
@@ -40,10 +42,6 @@ MODELS = {
     "Realistic Vision  (photo, fast)": ("sd15","RealisticVision_v6.safetensors"),
     "ToonYou  (cartoon, fast)":        ("sd15", "ToonYou_v6.safetensors"),
 }
-# Suffix for character mode (3D/rigging): A-pose, full body, straight
-CHAR_SUFFIX = (", full body character, standing straight in A-pose, arms slightly "
-    "away from body, front view, symmetrical, neutral pose, full figure from head to toe, "
-    "character reference sheet, plain solid grey background, even lighting, T-pose")
 # (base resolution, hi-res factor) -> final result is base * factor
 SIZES = {
     "Square HD (1024x1024)":    (512,512,2.0),
@@ -78,7 +76,11 @@ def stop_all():
     run_hidden(f'powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort {cfg.comfy_port},{cfg.webui_port},{cfg.rag_port} -State Listen -EA SilentlyContinue | %% {{ Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }}"')
 
 def start_webui_and_open():
-    if not port_open(cfg.webui_port): run_hidden(f'"{os.path.join(cfg.tools_dir, "start-webui.cmd")}"')
+    # Open WebUI launcher lives in the repo's rag/ (written by setup/install.py
+    # step_webui). Not the old cross-project cfg.tools_dir path.
+    launcher=os.path.join(os.path.dirname(os.path.abspath(__file__)),"rag","start-webui.cmd")
+    if not port_open(cfg.webui_port) and os.path.exists(launcher):
+        run_hidden(f'"{launcher}"')
     webbrowser.open(cfg.webui_url)
 def _open_cmd(path):
     # reliably open a console window (os.startfile launches the .cmd in its own window)
@@ -87,9 +89,6 @@ def _open_cmd(path):
         subprocess.Popen(f'start "Overlkd" "{path}"', shell=True)
 def open_coder(): _open_cmd(cfg.coder_cmd)
 def open_status(): _open_cmd(cfg.status_cmd)
-def open_3d():
-    if os.path.exists(os.path.join(cfg.tripo_src_dir, "run.py")): _open_cmd(os.path.join(cfg.tripo_dir, "Bild-zu-3D.cmd"))
-    else: _open_cmd(os.path.join(cfg.tripo_dir, "1-Setup-3D-installieren.cmd"))
 
 # ---------- Code-RAG (local, private semantic code search) ----------
 RAG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rag")
@@ -518,11 +517,21 @@ def make_frameless(win, title, closer):
 
 # ---- Subtle support dialog (copy crypto addresses) ----
 def open_support_window():
-    win=tk.Toplevel(root); win.title("Overlkd - Support"); win.geometry("440x400")
+    win=tk.Toplevel(root); win.title("Overlkd - Support"); win.geometry("440x470")
     win.lift(); win.focus_force()
     make_frameless(win, "♥  Support", win.destroy)
     tk.Label(win,text="Support keeps it free & offline.",font=sub_f,bg=BG,fg=ACCENT_LT).pack(pady=(16,4))
-    tk.Label(win,text="Copy an address to send a tip - thank you.",font=small_f,bg=BG,fg=SUB).pack(pady=(0,10))
+    # Best support: grab our game on Steam.
+    gcard=tk.Frame(win,bg=CARD); gcard.pack(fill="x",padx=20,pady=(4,10))
+    tk.Label(gcard,text="\U0001f3ae  Or buy our game",font=("Segoe UI",10,"bold"),
+             bg=CARD,fg=ACCENT).pack(anchor="w",padx=10,pady=(8,0))
+    tk.Label(gcard,text=f"{GAME_NAME} - survival co-op, on Steam",font=small_f,
+             bg=CARD,fg=SUB).pack(anchor="w",padx=10)
+    glink=tk.Label(gcard,text="→ View on Steam",font=("Segoe UI",9,"bold"),
+                   bg=CARD,fg=ACCENT_LT,cursor="hand2")
+    glink.pack(anchor="w",padx=10,pady=(2,8))
+    glink.bind("<Button-1>",lambda e:webbrowser.open(GAME_URL))
+    tk.Label(win,text="or copy an address to send a tip - thank you.",font=small_f,bg=BG,fg=SUB).pack(pady=(0,10))
     def copy(val,btn):
         win.clipboard_clear(); win.clipboard_append(val)
         btn.config(text="copied ✓")
@@ -593,12 +602,10 @@ make_card(left,0,0,"▶","START ALL","Boot up services",start_all,base=ACCENT,fg
 make_card(left,1,0,"\U0001f3a8","Create images","Text in, image out",lambda:open_generator())
 make_card(left,1,1,"\U0001f4ac","Chat","Local AI models",start_webui_and_open)
 make_card(left,2,0,"\U0001f4bb","Coding agent","Aider (terminal)",open_coder)
-make_card(left,2,1,"\U0001f9ca","Image → 3D","Photo -> 3D model",lambda:open_3d_window())
-make_card(left,3,0,"\U0001f3c3","Rig/Animate","Mixamo (browser)",lambda:webbrowser.open("https://www.mixamo.com"))
-make_card(left,3,1,"\U0001f4ca","Status","RAM / VRAM / GPU",open_status)
-make_card(left,4,0,"\U0001f3ad","Face swap","Face swap (photo)",lambda:open_faceswap_window())
-make_card(left,4,1,"\U0001f444","Lip sync","Bring a photo to life",lambda:open_lipsync_window())
-make_card(left,5,0,"\U0001f50e","Code search","Index & search your own code — local",lambda:open_rag_window()).grid(columnspan=2,sticky="nsew")
+make_card(left,2,1,"\U0001f4ca","Status","RAM / VRAM / GPU",open_status)
+make_card(left,3,0,"\U0001f3ad","Face swap","Face swap (photo)",lambda:open_faceswap_window())
+make_card(left,3,1,"\U0001f444","Lip sync","Bring a photo to life",lambda:open_lipsync_window())
+make_card(left,4,0,"\U0001f50e","Code search","Index & search your own code — local",lambda:open_rag_window()).grid(columnspan=2,sticky="nsew")
 
 # ---- Right column: service status + memory/stop ----
 tk.Label(right,text="SERVICES",font=small_f,bg=BG,fg=SUB).pack(anchor="w",pady=(2,4))
@@ -653,10 +660,6 @@ def open_generator():
     enhance_var=tk.BooleanVar(value=True)
     tk.Checkbutton(win,text="✨ Optimize prompt with AI (casual text ok → produces an English FLUX prompt)",
         variable=enhance_var,font=sub_f,bg=BG,fg=FG,selectcolor=CARD,activebackground=BG,activeforeground=FG,anchor="w").pack(fill="x",padx=24,pady=(2,0))
-    char_var=tk.BooleanVar(value=False)
-    cb=tk.Checkbutton(win,text="\U0001f9cd  Character for 3D/rigging (A-pose, full body, front view)",
-        variable=char_var,font=sub_f,bg=BG,fg=FG,selectcolor=CARD,activebackground=BG,activeforeground=FG,anchor="w")
-    cb.pack(fill="x",padx=24,pady=(2,0))
 
     # Buttons FIRST (always visible, at the top), then the image fills the rest
     gen_btn=tk.Button(win,text="✨  Generate image",font=btn_f,bg=ACCENT,fg="#ffffff",relief="flat",cursor="hand2",activebackground=ACCENT_DK,activeforeground="#ffffff")
@@ -739,78 +742,11 @@ def open_generator():
                     better=enhance_prompt(p)
                     if better: pr=better; set_status("Optimized: "+pr[:70]+"...")
                 except Exception as e: set_status(f"Optimization skipped ({e}) - using original")
-            if char_var.get(): pr=pr+CHAR_SUFFIX
             generate(engine,mf,pr,w,h,hires,set_status,show_image)
             win.after(0,lambda:gen_btn.config(state="normal",text="✨  Generate image"))
         threading.Thread(target=worker,daemon=True).start()
 
     gen_btn.config(command=do_gen)
-
-# ---------- Image -> 3D window (with file picker) ----------
-def open_3d_window():
-    from PIL import Image, ImageTk
-    if not os.path.exists(os.path.join(cfg.tripo_src_dir, "run.py")):
-        _open_cmd(os.path.join(cfg.tripo_dir, "1-Setup-3D-installieren.cmd")); return
-    win=tk.Toplevel(root); win.title("Overlkd - Image to 3D"); win.configure(bg=BG)
-    win.geometry("560x640"); win.lift(); win.focus_force()
-    make_frameless(win, "Vulture AI — Image to 3D", win.destroy)
-    win._img=None
-    tk.Label(win,text="\U0001f9ca Image → 3D model",font=title_f,bg=BG,fg=FG).pack(pady=(14,4))
-    tk.Label(win,text="Select image → options → create 3D (.obj for Mixamo/Meshy)",font=small_f,bg=BG,fg=SUB).pack(pady=(0,8))
-
-    pathvar=tk.StringVar(value="No image selected yet")
-    def pick():
-        f=filedialog.askopenfilename(title="Choose image",initialdir=OUTPUT_DIR,
-            filetypes=[("Images","*.png *.jpg *.jpeg *.webp"),("All","*.*")])
-        if f:
-            win._img=f; pathvar.set(os.path.basename(f))
-            try:
-                im=Image.open(f); im.thumbnail((300,300)); ph=ImageTk.PhotoImage(im)
-                prev.config(image=ph,text=""); prev._ref=ph
-            except: pass
-    tk.Button(win,text="\U0001f4c2  Select image",font=btn_f,bg=CARD,fg=FG,relief="flat",cursor="hand2",command=pick).pack(fill="x",padx=24,pady=(2,2))
-    tk.Label(win,textvariable=pathvar,font=small_f,bg=BG,fg=SUB).pack()
-    prev=tk.Label(win,bg=CARD,text="(Preview)",fg=SUB,font=sub_f); prev.pack(padx=24,pady=8,fill="both",expand=True); prev._ref=None
-
-    tex_var=tk.BooleanVar(value=True)
-    tk.Checkbutton(win,text="With texture/color (a bit slower)",variable=tex_var,font=sub_f,bg=BG,fg=FG,
-        selectcolor=CARD,activebackground=BG,activeforeground=FG).pack(anchor="w",padx=24)
-    detrow=tk.Frame(win,bg=BG); detrow.pack(anchor="w",padx=24,pady=(2,0))
-    tk.Label(detrow,text="Detail (more polygons = finer, more RAM): ",font=sub_f,bg=BG,fg=SUB).pack(side="left")
-    DETAIL={"Standard (256)":256,"High (320)":320,"Maximum (384)":384}
-    det_var=tk.StringVar(value="Standard (256)")
-    ttk.Combobox(detrow,textvariable=det_var,values=list(DETAIL.keys()),state="readonly",width=15).pack(side="left")
-
-    st=tk.Label(win,text="Tip: character-mode images (A-pose, full body) rig best.",font=small_f,bg=BG,fg=SUB); st.pack(pady=(4,2))
-    def set_st(t): win.after(0,lambda:st.config(text=t))
-
-    def do3d():
-        if not win._img: set_st("Please select an image first."); return
-        go.config(state="disabled",text="Creating 3D... (30-90s)")
-        def worker():
-            try:
-                set_st("Freeing ComfyUI memory for 3D...")
-                try: urllib.request.urlopen(urllib.request.Request(f"{COMFY_API}/free",data=b'{"unload_models":true,"free_memory":true}',headers={"Content-Type":"application/json"}),timeout=5)
-                except: pass
-                set_st("Generating 3D model...")
-                mcres=DETAIL.get(det_var.get(),256)
-                cmd=[cfg.tripo_python,"run.py",win._img,"--output-dir",cfg.tripo_output_dir,"--model-save-format","obj","--mc-resolution",str(mcres),"--pretrained-model-name-or-path",cfg.tripo_model_dir]
-                if tex_var.get(): cmd[6:6]=["--bake-texture","--texture-resolution","1024"]
-                r=subprocess.run(cmd,cwd=cfg.tripo_src_dir,capture_output=True,text=True,creationflags=subprocess.CREATE_NO_WINDOW)
-                out=os.path.join(cfg.tripo_output_dir, "0", "mesh.obj")
-                if os.path.exists(out):
-                    set_st("DONE! mesh.obj created. Opening folder.")
-                    os.startfile(os.path.join(cfg.tripo_output_dir, "0"))
-                else:
-                    set_st("3D creation error (image may be unsuitable).")
-            except Exception as e: set_st(f"Error: {e}")
-            win.after(0,lambda:go.config(state="normal",text="\U0001f9ca  Create 3D model"))
-        threading.Thread(target=worker,daemon=True).start()
-
-    go=tk.Button(win,text="\U0001f9ca  Create 3D model",font=btn_f,bg=ACCENT,fg="#ffffff",relief="flat",cursor="hand2",command=do3d,activebackground=ACCENT_DK,activeforeground="#ffffff")
-    go.pack(fill="x",padx=24,pady=(4,4))
-    tk.Button(win,text="\U0001f4c1 Open 3D folder",font=small_f,bg=CARD,fg=SUB,relief="flat",cursor="hand2",
-        command=lambda:os.startfile(cfg.tripo_output_dir) if os.path.exists(cfg.tripo_output_dir) else None).pack(pady=(0,10))
 
 # ---------- Face swap window ----------
 def open_faceswap_window():
@@ -1372,9 +1308,9 @@ def open_setup_window():
 
     st=tk.Label(body,text="Ready." if have_installer else "Installer not found.",
                 font=sub_f,bg=BG,fg=GREEN,wraplength=660)
-    def set_st(t, busy=False):
+    def set_st(t, busy=False, color=None):
         def _apply():
-            fixed_st.config(text=t, fg=(ACCENT_LT if busy else GREEN))
+            fixed_st.config(text=t, fg=(color or (ACCENT_LT if busy else GREEN)))
             try: st.config(text=t)
             except Exception: pass
         win.after(0,_apply)
@@ -1409,9 +1345,18 @@ def open_setup_window():
     man_rows=tk.Frame(man_card,bg=CARD); man_rows.pack(fill="x",padx=10,pady=(0,8))
 
     def _man_open_folder(target):
-        # Make the destination folder (so it exists to drop the file into) and open it.
+        # Open the folder to drop the file/pack into. For a FILE target (...\x.pth) that
+        # is the parent dir; for a FOLDER target (...\buffalo_l, ...\liveportrait) it is
+        # the folder ITSELF -- so users extract INTO it, not one level too high.
         try:
-            d=os.path.dirname(target); os.makedirs(d,exist_ok=True); os.startfile(d)
+            # Guard: never create stray relative folders (happens if ComfyUI isn't
+            # configured yet -> the target is a bare relative path). Install first.
+            if not os.path.isabs(target): return
+            base=os.path.basename(target.rstrip("\\/"))
+            is_file=("." in base and base.rsplit(".",1)[1].lower()
+                     in ("pth","onnx","safetensors","ckpt","bin","zip","gguf"))
+            d=os.path.dirname(target) if is_file else target
+            os.makedirs(d,exist_ok=True); os.startfile(d)
         except Exception: pass
     def _man_render(items):
         # (main thread) rebuild the rows. items: None = loading, str = error, list = models.
@@ -1617,7 +1562,7 @@ def open_requirements_window(first_run=False):
         dot.config(fg=GREEN if ok else RED)
         txt.config(text=base+(f"  ({detail})" if detail else ""))
 
-    _req_row("gpu","NVIDIA GPU + driver","for GPU-accelerated image/3D/video",
+    _req_row("gpu","NVIDIA GPU + driver","for GPU-accelerated image generation",
              "https://www.nvidia.com/Download/index.aspx")
     _req_row("python","Python 3.11 (64-bit)","runs Vulture and the tools",
              "https://www.python.org/downloads/")
@@ -1660,8 +1605,8 @@ def open_requirements_window(first_run=False):
     tk.Label(sec2,text="Nothing is bundled — Vulture downloads each tool/model from its original source "
              "and runs tools as separate processes, so you accept each project's own license.",
              font=small_f,bg=CARD,fg=FG,anchor="w",wraplength=640,justify="left").pack(anchor="w",padx=10,pady=(0,4))
-    for _ln in ("• ComfyUI (image/3D backend) — GPL-3.0, launched as a separate process",
-                "• Models from HuggingFace & original repos (FLUX, SD1.5, 3D, face, upscaler)",
+    for _ln in ("• ComfyUI (image backend) — GPL-3.0, launched as a separate process",
+                "• Models from HuggingFace & original repos (FLUX, SD1.5, face, upscaler)",
                 "• Local LLMs via `ollama pull` (Qwen, DeepSeek)"):
         tk.Label(sec2,text=_ln,font=small_f,bg=CARD,fg=SUB,anchor="w",
                  wraplength=640,justify="left").pack(anchor="w",padx=16,pady=1)
@@ -1672,7 +1617,7 @@ def open_requirements_window(first_run=False):
     tk.Label(sec3,text="③ Licenses — most is free for commercial use, a few models are NOT",
              font=sub_f,bg=CARD,fg=ACCENT,anchor="w",wraplength=640,justify="left").pack(anchor="w",padx=10,pady=(8,4))
     tk.Label(sec3,text="✅ Commercial-OK: FLUX.1-schnell (the default image model — you own your images), "
-             "SD1.5 checkpoints, TripoSR (3D), the local LLMs (Qwen / DeepSeek), Ollama, Aider, ComfyUI.",
+             "SD1.5 checkpoints, the local LLMs (Qwen / DeepSeek), Ollama, Aider, ComfyUI.",
              font=small_f,bg=CARD,fg=GREEN,anchor="w",wraplength=640,justify="left").pack(anchor="w",padx=10,pady=(0,6))
     tk.Label(sec3,text="⛔ Personal / research only (their authors' rule — NOT for commercial products):",
              font=sub_f,bg=CARD,fg=RED,anchor="w",wraplength=640,justify="left").pack(anchor="w",padx=10,pady=(2,2))
@@ -1680,8 +1625,7 @@ def open_requirements_window(first_run=False):
                 "• Face restore — CodeFormer (S-Lab license)",
                 "• 4x-UltraSharp upscaler (CC-BY-NC-SA) — swap to a permissive upscaler for commercial work",
                 "• FLUX.1-dev — if you switch off the schnell default",
-                "• LivePortrait — ships the non-commercial InsightFace detector",
-                "• Hunyuan3D (Tencent) — commercial only if under 1M monthly users AND not in the EU / UK / South Korea"):
+                "• LivePortrait — ships the non-commercial InsightFace detector"):
         tk.Label(sec3,text=_ln,font=small_f,bg=CARD,fg=SUB,anchor="w",
                  wraplength=630,justify="left").pack(anchor="w",padx=16,pady=1)
     tk.Label(sec3,text="Open WebUI's name/logo must stay visible (don't white-label its chat).",

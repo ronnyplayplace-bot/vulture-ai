@@ -1,6 +1,9 @@
 # ===== Overlkd Studio .gitignore =====
 # SECURITY FIRST: never commit secrets, keys, personal data, or model weights.
 
+# --- Machine-specific config (paths differ per machine; use config.example.json) ---
+config.json
+
 # --- Secrets / credentials (NEVER commit) ---
 *.key
 *.pem
@@ -84,3 +87,6 @@ desktop.ini
 .vscode/
 .idea/
 
+
+# --- generated per-machine (baked paths) ---
+rag/start-webui.cmd

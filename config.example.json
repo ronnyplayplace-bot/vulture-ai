@@ -32,13 +32,6 @@
     "launchers_dir": "",
     "_launchers_dir": "Folder that holds Overlkd-Start.cmd, Overlkd-Coder.cmd, Overlkd-Status.cmd. Empty => the repo root (folder that contains studio.py).",
 
-    "tripo_dir": "D:/tripo3d",
-    "tripo_python": "D:/tripo3d/venv/Scripts/python.exe",
-    "tripo_src_dir": "D:/tripo3d/TripoSR",
-    "tripo_model_dir": "D:/tripo3d/model",
-    "tripo_output_dir": "D:/tripo3d/output",
-    "_tripo": "Optional Image->3D (TripoSR). Leave the whole block as \"\" if you don't use it; the 3D button will offer to run the setup script.",
-
     "ollama_exe": "",
     "_ollama_exe": "Path to ollama.exe. Empty => auto-detect (%LOCALAPPDATA%/Programs/Ollama/ollama.exe or PATH).",
 

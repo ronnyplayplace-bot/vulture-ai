@@ -24,8 +24,12 @@ echo   [3] qwen3.5:4b         (NEW, fast, 256K context)
 echo   [4] qwen3:14b          (largest, slow)
 echo   [5] deepseek-r1:7b     (debugging + reasoning)
 echo.
-set /p "MODELL_WAHL=Model [1-5, Enter=1]: "
-if "!MODELL_WAHL!"=="" set "MODELL_WAHL=1"
+REM Default = the preferred qwen3.5:9b IF it's actually installed, otherwise the
+REM always-present qwen2.5-coder:7b -- so a fresh clone works on Enter either way.
+set "DEF=2"
+ollama list 2>nul | findstr /I "qwen3.5:9b" >nul && set "DEF=1"
+set /p "MODELL_WAHL=Model [1-5, Enter=!DEF!]: "
+if "!MODELL_WAHL!"=="" set "MODELL_WAHL=!DEF!"
 if "!MODELL_WAHL!"=="1" set "MODELL=ollama_chat/qwen3.5:9b"
 if "!MODELL_WAHL!"=="2" set "MODELL=ollama_chat/qwen2.5-coder:7b"
 if "!MODELL_WAHL!"=="3" set "MODELL=ollama_chat/qwen3.5:4b"
@@ -67,6 +71,14 @@ echo Model  : !MODELL!
 echo Commands: /help  /add file  /run cmd  /architect  /exit
 echo ----------------------------------------------------------
 echo.
+if "!AIDER_PY!"=="" (
+    echo   [!] Aider is not installed yet.
+    echo       Run once:  python setup\install.py --steps aider
+    echo       ^(or use the Setup window's "Install everything"^).
+    echo.
+    pause
+    exit /b 1
+)
 "%AIDER_PY%" -m aider --model !MODELL!
 echo.
 echo ==========================================================

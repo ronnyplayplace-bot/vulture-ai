@@ -11,7 +11,6 @@ installing, you agree to the licenses of the downloaded components.
   Aider ..................... Apache-2.0
   fastembed ................. Apache-2.0
   Open WebUI ................ BSD-3-Clause + branding clause (see note *)
-  TripoSR (code + weights) .. MIT
 
 --- COPYLEFT CODE (GPL-3.0) — launched as separate processes, unmodified ---
   ComfyUI ................... GPL-3.0
@@ -42,9 +41,6 @@ installing, you agree to the licenses of the downloaded components.
   FLUX.1-dev (optional, NOT the default)  FLUX.1 [dev] Non-Commercial License
   LivePortrait (KJ) ..................... code/weights MIT, but ships with
        InsightFace (NON-COMMERCIAL); replace with MediaPipe for commercial use
-  Hunyuan3D-2 (Tencent) ................. Tencent Hunyuan Community License:
-       commercial OK only if under 1,000,000 monthly active users AND not in
-       the EU, UK, or South Korea
 
 (*) Open WebUI note: the "Open WebUI" name and logo must remain visible in any
     deployment with more than 50 end users in a rolling 30-day period, unless

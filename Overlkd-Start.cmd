@@ -17,10 +17,16 @@ REM 1) Ollama (model runtime), if not already active
 tasklist /FI "IMAGENAME eq ollama.exe" | find /I "ollama.exe" >nul || start "" "%LOCALAPPDATA%\Programs\Ollama\ollama.exe" serve
 
 REM 2) Local Code-RAG (port %RAG_PORT%) - only if not already open
-netstat -an | find ":%RAG_PORT% " | find "LISTENING" >nul || start "Overlkd Memory" /min "%TOOLS_DIR%\start-local-memory.cmd"
+netstat -an | find ":%RAG_PORT% " | find "LISTENING" >nul
+if errorlevel 1 (
+    if exist "%~dp0rag\start-rag.cmd" ( start "Overlkd Memory" /min "%~dp0rag\start-rag.cmd" ) else ( echo [i] Code-RAG launcher not found - run the installer. )
+)
 
-REM 3) Open WebUI (port %WEBUI_PORT%)
-netstat -an | find ":%WEBUI_PORT% " | find "LISTENING" >nul || start "Overlkd WebUI" /min "%TOOLS_DIR%\start-webui.cmd"
+REM 3) Open WebUI (port %WEBUI_PORT%) - optional local chat UI
+netstat -an | find ":%WEBUI_PORT% " | find "LISTENING" >nul
+if errorlevel 1 (
+    if exist "%~dp0rag\start-webui.cmd" ( start "Overlkd WebUI" /min "%~dp0rag\start-webui.cmd" ) else ( echo [i] Open WebUI not installed - optional, skipping. )
+)
 
 REM 4) ComfyUI (port %COMFY_PORT%) - optional, only if already installed
 if exist "%COMFY_PY%" (

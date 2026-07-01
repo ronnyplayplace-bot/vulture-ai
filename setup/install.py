@@ -51,7 +51,7 @@ from vulture.config import (  # noqa: E402
 )
 
 MANIFEST_PATH = Path(__file__).resolve().parent / "models.manifest.json"
-STEP_ORDER = ["comfyui", "nodes", "models", "ollama", "rag", "config"]
+STEP_ORDER = ["comfyui", "nodes", "models", "ollama", "aider", "webui", "rag", "config"]
 
 
 # --------------------------------------------------------------------------- #
@@ -323,6 +323,7 @@ def step_nodes(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
 
     nodes = manifest.get("custom_nodes", [])
     installed_any = False
+    missing_required = []
     for node in nodes:
         if not node.get("required", False) and not args.include_optional:
             skip(f"{node['name']} (optional)")
@@ -339,12 +340,28 @@ def step_nodes(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
             if node.get("recurse_submodules"):
                 cmd.append("--recurse-submodules")
             cmd += [node["repo"], dest]
-            run(cmd, dry=args.readonly)
+            rc = run(cmd, dry=args.readonly)
+            # A failed clone must NOT pass silently (that is how the disabled
+            # ReActor repo left face-swap broken). Surface it, name the node.
+            if not args.readonly and (rc != 0 or not os.path.isdir(dest)):
+                fail(f"{node['name']}: clone FAILED from {node['repo']}")
+                if node.get("required"):
+                    missing_required.append(node["name"])
+                continue
             installed_any = True
         # per-node pip requirements
         req = os.path.join(dest, "requirements.txt")
         if os.path.exists(req) and not args.readonly:
             run([venv_py, "-m", "pip", "install", "-r", req], check=False)
+            installed_any = True
+        # Nodes needing a prebuilt wheel on Windows (ReActor -> InsightFace):
+        # source builds need MSVC, so use Gourieff's cp311 wheel + onnxruntime-gpu.
+        wheel = node.get("insightface_wheel")
+        if wheel and not args.readonly:
+            info(f"installing prebuilt InsightFace wheel for {node['name']}")
+            run([venv_py, "-m", "pip", "install", wheel], check=False)
+            run([venv_py, "-m", "pip", "uninstall", "-y", "onnxruntime"], check=False)
+            run([venv_py, "-m", "pip", "install", "onnxruntime-gpu"], check=False)
             installed_any = True
 
     # Re-force critical pins AFTER node installs (order matters!).
@@ -355,9 +372,20 @@ def step_nodes(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
     elif args.readonly:
         for pin in manifest.get("pip_pins", []):
             info(f"(read-only) would pin {pin['spec']}")
+
+    # Verify InsightFace actually imports (ReActor's hard requirement).
+    if not args.readonly and os.path.exists(venv_py):
+        rc = run([venv_py, "-c", "import insightface"], check=False)
+        if rc != 0:
+            warn("InsightFace is NOT importable -- face-swap (ReActor) will not work.")
+            warn('Fix: "' + venv_py + '" -m pip install '
+                 "https://github.com/Gourieff/Assets/raw/main/Insightface/"
+                 "insightface-0.7.3-cp311-cp311-win_amd64.whl")
+            warn('then re-pin: "' + venv_py + '" -m pip install numpy==1.26.4')
+
+    if missing_required:
+        fail("required custom node(s) failed to install: " + ", ".join(missing_required))
     ok("custom nodes done")
-    warn("ReActor needs InsightFace: if its pip build failed, install the prebuilt "
-         "cp311 wheel from github.com/Gourieff/Assets, then re-run.")
 
 
 # --------------------------------------------------------------------------- #
@@ -379,12 +407,15 @@ def _download_hf_file(repo: str, filename: str, dest_dir: str, rename_to: Option
     return final
 
 
-def _download_hf_snapshot(repo: str, dest_dir: str, hf_cache: Optional[str]) -> str:
+def _download_hf_snapshot(repo: str, dest_dir: str, hf_cache: Optional[str],
+                          allow_patterns: Optional[List[str]] = None) -> str:
     from huggingface_hub import snapshot_download
     os.makedirs(dest_dir, exist_ok=True)
     kwargs = dict(repo_id=repo, local_dir=dest_dir)
     if hf_cache:
         kwargs["cache_dir"] = hf_cache
+    if allow_patterns:  # e.g. ["*.safetensors"] -> skip an unsafe/optional pickle in the repo
+        kwargs["allow_patterns"] = allow_patterns
     snapshot_download(**kwargs)
     return dest_dir
 
@@ -422,6 +453,75 @@ def _extract_zip(zip_path: str, dest_dir: str) -> None:
         zf.extractall(dest_dir)
 
 
+def _fetch_model(live: Config, m: Dict[str, Any], hf_cache: Optional[str]) -> str:
+    """Download ONE model to its manifest target. Raises on error / unknown type.
+
+    Used both by the bulk 'models' step and by the studio's per-model
+    "Get it" button (--get), so the file always lands at the exact path and
+    name Vulture expects -- the user never has to rename anything by hand.
+    """
+    dest = model_target_path(live, m)
+    src = m["source"]
+    stype = src["type"]
+    if stype == "hf_file":
+        _download_hf_file(src["repo"], src["file"], os.path.dirname(dest),
+                          src.get("rename_to"), hf_cache)
+    elif stype == "hf_snapshot":
+        _download_hf_snapshot(src["repo"], dest, hf_cache, src.get("allow_patterns"))
+    elif stype == "url":
+        if src.get("extract") == "zip":
+            tmp_zip = dest.rstrip("\\/") + ".zip"
+            _download_url(src["url"], tmp_zip, m.get("approx_size_mb"))
+            os.makedirs(dest, exist_ok=True)
+            _extract_zip(tmp_zip, dest)
+            try:
+                os.remove(tmp_zip)
+            except OSError:
+                pass
+        else:
+            _download_url(src["url"], dest, m.get("approx_size_mb"))
+    else:
+        raise ValueError(f"unknown source type '{stype}'")
+    return dest
+
+
+def step_get(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
+             args: argparse.Namespace) -> int:
+    """Explicit, user-initiated download of specific models by name (--get NAME).
+
+    This is the ONLY path that will fetch a non-commercial model, and only
+    because the user clicked its "Get it (I accept the license)" button in the
+    studio. Nothing here runs during a normal 'Install everything'.
+    """
+    banner("Get model(s) -- explicit, user-requested download")
+    if not _ensure_pip_deps():
+        fail("downloader deps unavailable.")
+        return 1
+    live = _live_config(cfg, state)
+    hf_cache = live.hf_cache_dir or None
+    if hf_cache:
+        os.environ.setdefault("HF_HOME", hf_cache)
+    by_name = {m["name"]: m for m in manifest.get("models", [])}
+    failed = 0
+    for name in args.get:
+        m = by_name.get(name)
+        if not m:
+            fail(f"no model named '{name}' in the manifest.")
+            failed += 1
+            continue
+        if m.get("license"):
+            info(f"license: {m['name']} -- {m['license']} "
+                 "(non-commercial: governs how you may USE it, not the download itself)")
+        info(f"downloading {m['name']} ({human_mb(m.get('approx_size_mb'))})")
+        try:
+            dest = _fetch_model(live, m, hf_cache)
+            ok(f"{m['name']} -> {dest}")
+        except Exception as exc:
+            fail(f"{m['name']}: {exc}")
+            failed += 1
+    return 1 if failed else 0
+
+
 def step_models(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
                 args: argparse.Namespace) -> Dict[str, int]:
     banner("STEP 3/6  model files")
@@ -431,7 +531,7 @@ def step_models(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
     if hf_cache:
         os.environ.setdefault("HF_HOME", hf_cache)
 
-    stats = {"downloaded": 0, "skipped": 0, "failed": 0}
+    stats = {"downloaded": 0, "skipped": 0, "failed": 0, "failed_names": []}
     nc_skipped = 0  # non-commercial models Vulture NEVER downloads (user gets them manually)
     file_models = [m for m in manifest.get("models", [])
                    if m.get("source", {}).get("type") != "ollama"]
@@ -471,28 +571,7 @@ def step_models(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
         info(f"downloading {m['name']} ({human_mb(m.get('approx_size_mb'))})")
         info(f"    -> {dest}")
         try:
-            stype = src["type"]
-            if stype == "hf_file":
-                _download_hf_file(src["repo"], src["file"], os.path.dirname(dest),
-                                  src.get("rename_to"), hf_cache)
-            elif stype == "hf_snapshot":
-                _download_hf_snapshot(src["repo"], dest, hf_cache)
-            elif stype == "url":
-                if src.get("extract") == "zip":
-                    tmp_zip = dest.rstrip("\\/") + ".zip"
-                    _download_url(src["url"], tmp_zip, m.get("approx_size_mb"))
-                    os.makedirs(dest, exist_ok=True)
-                    _extract_zip(tmp_zip, dest)
-                    try:
-                        os.remove(tmp_zip)
-                    except OSError:
-                        pass
-                else:
-                    _download_url(src["url"], dest, m.get("approx_size_mb"))
-            else:
-                warn(f"unknown source type '{stype}' for {m['name']}")
-                stats["failed"] += 1
-                continue
+            _fetch_model(live, m, hf_cache)
             ok(f"{m['name']}")
             stats["downloaded"] += 1
         except Exception as exc:  # keep going; report at the end
@@ -500,6 +579,7 @@ def step_models(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
             if m.get("license_note", "").lower().find("login") >= 0:
                 warn("this repo may be gated -- run 'huggingface-cli login' and retry.")
             stats["failed"] += 1
+            stats["failed_names"].append(m["name"])
     if nc_skipped:
         info(f"[note] {nc_skipped} non-commercial model(s) are NOT downloaded by Vulture. "
              "Open the studio's \"Setup\" -> Manual models section for links + folders.")
@@ -513,7 +593,7 @@ def step_ollama(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
                 args: argparse.Namespace) -> Dict[str, int]:
     banner("STEP 4/6  Ollama models")
     live = _live_config(cfg, state)
-    stats = {"pulled": 0, "skipped": 0, "failed": 0}
+    stats = {"pulled": 0, "skipped": 0, "failed": 0, "failed_names": []}
 
     ollama = live.ollama_exe or shutil.which("ollama") or "ollama"
     env_overlay = live.ollama_env()
@@ -556,6 +636,7 @@ def step_ollama(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
         else:
             fail(f"{tag} (pull exit {rc}; tag may not exist in the Ollama library yet)")
             stats["failed"] += 1
+            stats["failed_names"].append(tag)
     return stats
 
 
@@ -572,8 +653,9 @@ def step_rag(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
         return
 
     # A dedicated venv keeps the RAG's fastapi/qdrant/fastembed deps isolated
-    # from ComfyUI's. Location is drive-agnostic (under %LOCALAPPDATA%).
-    base = _rag_base_dir()
+    # from ComfyUI's. Use rag_base so the venv lands exactly where rag_python
+    # looks for it -- honouring install_base (e.g. D:), not a hardcoded C: path.
+    base = live.rag_base
     venv_dir = os.path.join(base, "venv")
     venv_py = os.path.join(venv_dir, "Scripts", "python.exe")
     if not os.path.exists(venv_py):
@@ -613,6 +695,135 @@ def step_rag(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
 
 
 # --------------------------------------------------------------------------- #
+# STEP 5a - Aider coding agent (local-model pair programmer)
+# --------------------------------------------------------------------------- #
+def _tool_base_dir(name: str, install_base: str = "") -> str:
+    """Private base for a tool's venv. Honours install_base (e.g. D:) so big
+    venvs (Open WebUI ~7 GB) don't fill C:; falls back to %LOCALAPPDATA%."""
+    if install_base:
+        return os.path.join(install_base, "VultureAI", name)
+    base = os.environ.get("LOCALAPPDATA", "") if os.name == "nt" else ""
+    if not base:
+        base = os.path.join(os.path.expanduser("~"), ".local", "share")
+    return os.path.join(base, "VultureAI", name)
+
+
+def step_aider(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
+               args: argparse.Namespace) -> None:
+    banner("STEP 5a  Aider coding agent (uses your local Ollama models)")
+    live = _live_config(cfg, state)
+    base = _tool_base_dir("aider", live.install_base)
+    venv_dir = os.path.join(base, "venv")
+    venv_py = os.path.join(venv_dir, "Scripts", "python.exe")
+    if not os.path.exists(venv_py):
+        posix_py = os.path.join(venv_dir, "bin", "python")
+        if os.path.exists(posix_py):
+            venv_py = posix_py
+    base_py = live.system_python or sys.executable
+
+    if args.readonly:
+        info(f"(read-only) would create Aider venv at {venv_dir}")
+        info("(read-only) would pip install aider-chat")
+        return
+
+    if os.path.exists(venv_py):
+        skip(f"Aider venv present: {venv_dir}")
+    else:
+        os.makedirs(base, exist_ok=True)
+        info(f"creating Aider venv with {base_py}")
+        run([base_py, "-m", "venv", venv_dir], check=False)
+        if os.name != "nt":
+            venv_py = os.path.join(venv_dir, "bin", "python")
+    if not os.path.exists(venv_py):
+        warn("Aider venv python not found -- cannot install aider.")
+        return
+
+    run([venv_py, "-m", "pip", "install", "--upgrade", "pip"], check=False)
+    run([venv_py, "-m", "pip", "install",
+         "--upgrade-strategy", "only-if-needed", "aider-chat"], check=False)
+    # Record the resolved python so step_config writes aider_python -> config.json
+    # (batenv.py then exports %AIDER_PY% for Overlkd-Coder.cmd).
+    state["aider_python"] = _norm(venv_py)
+    rc = run([venv_py, "-m", "aider", "--version"], check=False)
+    if rc == 0:
+        ok("Aider ready. Launch via Overlkd-Coder.cmd (uses your local Ollama models).")
+    else:
+        warn("aider --version failed; check the pip output above.")
+
+
+# --------------------------------------------------------------------------- #
+# STEP 5b - Open WebUI (local chat frontend for Ollama, ~7 GB, Python 3.11)
+# --------------------------------------------------------------------------- #
+def _write_start_webui_cmd(live: Config, venv_dir: str, webui_data: str) -> None:
+    """(Re)write rag/start-webui.cmd from resolved config -- single local user."""
+    port = live.webui_port
+    ollama = live.ollama_api or "http://127.0.0.1:11434"
+    activate = os.path.join(venv_dir, "Scripts", "activate.bat")
+    out = REPO_ROOT / "rag" / "start-webui.cmd"
+    lines = [
+        "@echo off",
+        "REM Vulture AI -- Open WebUI (local chat). Written by setup/install.py.",
+        "title Vulture AI - Chat (Open WebUI)",
+        f'set "DATA_DIR={webui_data}"',
+        f'set "OLLAMA_BASE_URL={ollama}"',
+        'set "WEBUI_AUTH=False"',
+        'set "ENABLE_SIGNUP=False"',
+        'set "DO_NOT_TRACK=true"',
+        'set "SCARF_NO_ANALYTICS=true"',
+        f'call "{activate}"',
+        f"echo Starting Open WebUI on http://localhost:{port}  "
+        "(first run: DB migration ~60-90s)",
+        f"open-webui serve --port {port}",
+    ]
+    out.write_text("\r\n".join(lines) + "\r\n", encoding="ascii", errors="replace")
+    ok(f"wrote {out}")
+
+
+def step_webui(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
+               args: argparse.Namespace) -> None:
+    banner("STEP 5b  Open WebUI (local chat / Ollama frontend)")
+    live = _live_config(cfg, state)
+    base = _tool_base_dir("webui", live.install_base)
+    venv_dir = os.path.join(base, "venv")
+    venv_py = os.path.join(venv_dir, "Scripts", "python.exe")
+    if not os.path.exists(venv_py):
+        posix_py = os.path.join(venv_dir, "bin", "python")
+        if os.path.exists(posix_py):
+            venv_py = posix_py
+    base_py = live.system_python or sys.executable
+    webui_data = os.path.join(base, "data")
+
+    if args.readonly:
+        info(f"(read-only) would create Open WebUI venv at {venv_dir}")
+        info("(read-only) would pip install open-webui  (~7 GB, Python 3.11 only)")
+        return
+
+    if os.path.exists(venv_py):
+        skip(f"Open WebUI venv present: {venv_dir}")
+    else:
+        os.makedirs(base, exist_ok=True)
+        info(f"creating Open WebUI venv with {base_py}")
+        info("NOTE: Open WebUI needs Python 3.11 (not 3.13).")
+        run([base_py, "-m", "venv", venv_dir], check=False)
+        if os.name != "nt":
+            venv_py = os.path.join(venv_dir, "bin", "python")
+    if not os.path.exists(venv_py):
+        warn("Open WebUI venv python not found -- cannot install open-webui.")
+        return
+
+    run([venv_py, "-m", "pip", "install", "--upgrade", "pip"], check=False)
+    info("installing open-webui (this pulls ~7 GB -- can take several minutes)...")
+    run([venv_py, "-m", "pip", "install", "--upgrade", "open-webui"], check=False)
+    try:
+        os.makedirs(webui_data, exist_ok=True)
+    except OSError:
+        pass
+    _write_start_webui_cmd(live, venv_dir, webui_data)
+    ok(f"Open WebUI ready. Chat card / rag\\start-webui.cmd (port {live.webui_port}). "
+       "First run builds the DB (~60-90 s before the page loads).")
+
+
+# --------------------------------------------------------------------------- #
 # STEP 6 - write config.json
 # --------------------------------------------------------------------------- #
 def step_config(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
@@ -628,6 +839,7 @@ def step_config(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
         "ollama_exe": live.ollama_exe,
         "ollama_models_dir": live.ollama_models_dir,
         "system_python": live.system_python,
+        "aider_python": live.aider_python,   # Coder (%AIDER_PY%) -- see step_aider
     }
     # Keep only non-empty resolved values.
     resolved_paths = {k: v for k, v in resolved_paths.items() if v}
@@ -673,6 +885,78 @@ def _live_config(cfg: Config, state: Dict[str, str]) -> Config:
 
 
 # --------------------------------------------------------------------------- #
+# Desktop / folder launcher (a real "Vulture AI" app icon, with the logo)
+# --------------------------------------------------------------------------- #
+def _find_pythonw(cfg: Config) -> str:
+    """Best windowless python (pythonw.exe) so the launcher shows no console."""
+    sp = cfg.system_python or ""
+    cands = []
+    if sp:
+        cands.append(os.path.join(os.path.dirname(sp), "pythonw.exe"))
+    cands.append(os.path.join(os.environ.get("LOCALAPPDATA", ""),
+                              "Programs", "Python", "Python311", "pythonw.exe"))
+    cands.append(shutil.which("pythonw") or "")
+    for c in cands:
+        if c and os.path.exists(c):
+            return c
+    return "pythonw"  # last resort: rely on PATH
+
+
+def _write_lnk(lnk: str, target: str, arguments: str, workdir: str,
+               icon: str, desc: str) -> bool:
+    """Create a Windows .lnk via PowerShell's WScript.Shell (no extra deps)."""
+    ps = (
+        "$W=New-Object -ComObject WScript.Shell;"
+        "$s=$W.CreateShortcut('%s');"
+        "$s.TargetPath='%s';"
+        "$s.Arguments='%s';"
+        "$s.WorkingDirectory='%s';"
+        "$s.IconLocation='%s';"
+        "$s.Description='%s';"
+        "$s.Save()"
+    ) % (lnk, target, arguments.replace("'", "''"), workdir, icon, desc)
+    try:
+        subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+                       check=False, capture_output=True,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except Exception as exc:
+        warn(f"shortcut command failed: {exc}")
+        return False
+    return os.path.exists(lnk)
+
+
+def make_shortcuts(cfg: Config) -> int:
+    """Create a 'Vulture AI' launcher (with the vulture.ico logo) in the install
+    folder AND on the Desktop -- so users double-click a real app icon, not a .cmd."""
+    if os.name != "nt":
+        warn("shortcuts are Windows-only -- skipped.")
+        return 0
+    app_dir = str(REPO_ROOT)
+    studio = os.path.join(app_dir, "studio.py")
+    icon = os.path.join(app_dir, "vulture.ico")
+    if not os.path.exists(studio):
+        fail(f"studio.py not found in {app_dir} -- cannot create a launcher.")
+        return 1
+    pyw = _find_pythonw(cfg)
+    icon_loc = icon if os.path.exists(icon) else pyw
+    dests = [os.path.join(app_dir, "Vulture AI.lnk")]
+    desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+    if os.path.isdir(desktop):
+        dests.append(os.path.join(desktop, "Vulture AI.lnk"))
+    made = 0
+    for lnk in dests:
+        if _write_lnk(lnk, pyw, f'"{studio}"', app_dir, icon_loc,
+                      "Vulture AI -- your local, offline AI studio"):
+            ok(f"launcher: {lnk}")
+            made += 1
+        else:
+            warn(f"could not create {lnk}")
+    if made:
+        info("Double-click 'Vulture AI' (with the logo) to start -- Desktop or install folder.")
+    return 0 if made else 1
+
+
+# --------------------------------------------------------------------------- #
 # Orchestration
 # --------------------------------------------------------------------------- #
 def main(argv: Optional[List[str]] = None) -> int:
@@ -694,6 +978,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--manual-list", action="store_true",
                     help="print one tab-separated line per non-commercial (manual) model and exit; "
                          "used by the studio's Setup window to render the Manual models section")
+    ap.add_argument("--get", action="append", default=[], metavar="NAME",
+                    help="download ONE model by its manifest name and exit (repeatable). This is the "
+                         "only path that fetches a non-commercial model, and only when the user asks "
+                         "for it explicitly from the studio's Manual models section.")
+    ap.add_argument("--shortcut", action="store_true",
+                    help="create a 'Vulture AI' launcher (with the logo) on the Desktop and in the "
+                         "install folder, then exit")
     ap.add_argument("--comfy-dir", default="",
                     help="where to install ComfyUI on a fresh machine")
     ap.add_argument("--config", default=None, help="path to an existing config.json to read")
@@ -721,6 +1012,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"MANUAL\t{m['name']}\t{lic}\t{page}\t{target}\t{present}\t{note}")
         return 0
 
+    # Explicit per-model download (studio "Get it" button). Handled before the
+    # normal step loop so it never touches ComfyUI/venv/config -- just the file.
+    if args.get:
+        return step_get(cfg, {}, manifest, args)
+
+    # Just (re)create the app launcher and exit (studio button / Create-Icon.cmd).
+    if args.shortcut:
+        return make_shortcuts(cfg)
+
     banner("Vulture AI  --  bootstrap installer")
     info(f"repo root      : {REPO_ROOT}")
     info(f"config source  : {cfg.source}")
@@ -745,6 +1045,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             summary["models"] = step_models(cfg, state, manifest, args)
         elif step == "ollama":
             summary["ollama"] = step_ollama(cfg, state, manifest, args)
+        elif step == "aider":
+            step_aider(cfg, state, manifest, args)
+        elif step == "webui":
+            step_webui(cfg, state, manifest, args)
         elif step == "rag":
             step_rag(cfg, state, manifest, args)
         elif step == "config":
@@ -761,7 +1065,23 @@ def main(argv: Optional[List[str]] = None) -> int:
         info(f"ollama      : {s['pulled']} pulled, {s['skipped']} present, {s['failed']} failed")
     failed = sum(summary.get(k, {}).get("failed", 0) for k in ("models", "ollama"))
     if failed:
-        warn(f"{failed} item(s) failed -- see messages above. Re-running is safe (resumes).")
+        names = []
+        for k in ("models", "ollama"):
+            names += summary.get(k, {}).get("failed_names", [])
+        warn(f"{failed} item(s) FAILED to download:")
+        for n in names:
+            warn(f"    - {n}")
+        warn("Re-run 'Install everything' to retry -- it resumes and re-tries only "
+             "what's still missing (nothing already downloaded is re-fetched).")
+
+    # After a real install, drop a 'Vulture AI' launcher (with the logo) so the
+    # user starts from a proper app icon, not a .cmd. Best-effort; never fails the run.
+    if not args.readonly and "config" in steps:
+        try:
+            make_shortcuts(cfg)
+        except Exception as exc:
+            warn(f"could not create the app launcher: {exc}")
+
     print("\n  Next: python setup/verify.py   (checks the whole install)\n")
     return 1 if failed else 0
 

@@ -33,11 +33,12 @@
       "note": "Tiled 4x-UltraSharp upscaling (wf_upscale)."
     },
     {
-      "name": "comfyui-reactor-node",
-      "repo": "https://github.com/Gourieff/comfyui-reactor-node.git",
+      "name": "ComfyUI-ReActor",
+      "repo": "https://github.com/Gourieff/ComfyUI-ReActor.git",
       "required": true,
       "provides": ["ReActorFaceSwap"],
-      "note": "Face-swap. Needs insightface + onnxruntime. On Windows install the prebuilt insightface cp311 wheel from Gourieff/Assets if pip build fails. Downloads inswapper_128 + buffalo_l (see models below)."
+      "insightface_wheel": "https://github.com/Gourieff/Assets/raw/main/Insightface/insightface-0.7.3-cp311-cp311-win_amd64.whl",
+      "note": "Face-swap. The old Gourieff/comfyui-reactor-node repo was disabled by GitHub (ToS) -> moved to Gourieff/ComfyUI-ReActor. Needs insightface (prebuilt cp311 wheel from Gourieff/Assets) + onnxruntime-gpu, then re-pin numpy==1.26.4. Uses inswapper_128 + buffalo_l (manual, non-commercial)."
     },
     {
       "name": "ComfyUI-LivePortraitKJ",
@@ -135,11 +136,11 @@
     },
     {
       "name": "FLUX autoencoder (VAE)",
-      "source": { "type": "hf_file", "repo": "black-forest-labs/FLUX.1-schnell", "file": "ae.safetensors", "rename_to": "flux_ae.safetensors" },
+      "source": { "type": "hf_file", "repo": "ffxvs/vae-flux", "file": "ae.safetensors", "rename_to": "flux_ae.safetensors" },
       "target_base": "comfy_models",
       "target_relative_path": "vae/flux_ae.safetensors",
       "approx_size_mb": 335,
-      "license_note": "Apache-2.0. NOTE: this repo may require 'huggingface-cli login' + accepting the licence once. Mirror fallback: Comfy-Org/flux1-schnell.",
+      "license_note": "Apache-2.0 (freely redistributable). Uses the ungated ffxvs/vae-flux mirror; the official black-forest-labs/FLUX.1-schnell repo is gated (401 without HF login).",
       "required": true
     },
     {
@@ -190,7 +191,7 @@
       "license": "CC-BY-NC-SA-4.0",
       "noncommercial": true,
       "page_url": "https://huggingface.co/lokCX/4x-Ultrasharp",
-      "manual_note": "Download 4x-UltraSharp.pth.",
+      "manual_note": "Save it in this folder named EXACTLY 4x-UltraSharp.pth (rename the download if it differs - Vulture loads it by that name).",
       "required": true
     },
 
@@ -204,7 +205,7 @@
       "license": "InsightFace non-commercial",
       "noncommercial": true,
       "page_url": "https://huggingface.co/ezioruan/inswapper_128.onnx",
-      "manual_note": "Download inswapper_128.onnx.",
+      "manual_note": "Save it in this folder named EXACTLY inswapper_128.onnx (rename the download if it differs).",
       "required": false
     },
     {
@@ -217,7 +218,7 @@
       "license": "InsightFace non-commercial",
       "noncommercial": true,
       "page_url": "https://github.com/deepinsight/insightface/releases/tag/v0.7",
-      "manual_note": "Download buffalo_l.zip (under the v0.7 assets) and unzip it into the folder.",
+      "manual_note": "Download buffalo_l.zip (v0.7 assets) and UNZIP it - the extracted .onnx files go into this buffalo_l folder (not the .zip itself).",
       "required": false
     },
     {
@@ -230,13 +231,13 @@
       "license": "S-Lab License 1.0 (non-commercial)",
       "noncommercial": true,
       "page_url": "https://github.com/sczhou/CodeFormer/releases/tag/v0.1.0",
-      "manual_note": "Download codeformer.pth.",
+      "manual_note": "Save it in this folder named EXACTLY codeformer.pth (rename the download if it differs).",
       "required": false
     },
 
     {
       "name": "LivePortrait weights (Kijai safetensors)",
-      "source": { "type": "hf_snapshot", "repo": "Kijai/LivePortrait_safetensors" },
+      "source": { "type": "hf_snapshot", "repo": "Kijai/LivePortrait_safetensors", "allow_patterns": ["*.safetensors"] },
       "target_base": "comfy_models",
       "target_relative_path": "liveportrait",
       "approx_size_mb": 1300,
@@ -244,7 +245,7 @@
       "license": "MIT weights, ships non-commercial InsightFace",
       "noncommercial": true,
       "page_url": "https://huggingface.co/Kijai/LivePortrait_safetensors",
-      "manual_note": "Grab the .safetensors files. The page's 'unsafe' flag is only an old, optional landmark_model.pth (a pickle) - skip it, it is not needed.",
+      "manual_note": "Put the .safetensors files into this folder. Skip the .pth the page flags as 'unsafe' - it's an old optional landmark model, not needed.",
       "required": false
     },
 

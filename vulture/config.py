@@ -69,11 +69,6 @@ DEFAULTS: Dict[str, Any] = {
         "output_dir": "",
         "tools_dir": "",
         "launchers_dir": "",
-        "tripo_dir": "",
-        "tripo_python": "",
-        "tripo_src_dir": "",
-        "tripo_model_dir": "",
-        "tripo_output_dir": "",
         "ollama_exe": "",
         "ollama_models_dir": "",
         "system_python": "",
@@ -295,22 +290,6 @@ def _detect_system_python() -> str:
     return _first_existing(candidates)
 
 
-def _detect_tripo(drives: List[str]) -> Dict[str, str]:
-    """Locate an optional TripoSR (Image->3D) install."""
-    for d in drives:
-        base = os.path.join(d, "tripo3d")
-        if os.path.exists(os.path.join(base, "TripoSR", "run.py")):
-            return {
-                "tripo_dir": base,
-                "tripo_src_dir": os.path.join(base, "TripoSR"),
-                "tripo_python": _first_existing(
-                    [os.path.join(base, "venv", "Scripts", "python.exe")]
-                ),
-                "tripo_model_dir": os.path.join(base, "model"),
-                "tripo_output_dir": os.path.join(base, "output"),
-            }
-    return {}
-
 
 def _detect_aider_python(drives: List[str]) -> str:
     """Locate the Python of an optional Aider coding-agent venv.
@@ -326,12 +305,22 @@ def _detect_aider_python(drives: List[str]) -> str:
         r"aider\venv\Scripts\python.exe",
     ]
     candidates: List[str] = []
+    # The installer's canonical locations first (step_aider honours install_base,
+    # e.g. D:\VultureAI\aider; falls back to %LOCALAPPDATA%\VultureAI\aider).
+    for d in drives:
+        candidates.append(os.path.join(d, "VultureAI", "aider",
+                                       "venv", "Scripts", "python.exe"))
+    localappdata = os.environ.get("LOCALAPPDATA", "")
+    if localappdata:
+        candidates.append(os.path.join(localappdata, "VultureAI", "aider",
+                                       "venv", "Scripts", "python.exe"))
     for d in drives:
         candidates += [os.path.join(d, r) for r in rel]
     candidates += [
         os.path.join(home, "ai-coder", "venv", "Scripts", "python.exe"),
         # POSIX venvs (for completeness on non-Windows)
         *[os.path.join(d, "ai-coder", "venv", "bin", "python") for d in drives],
+        os.path.join(home, ".local", "share", "VultureAI", "aider", "venv", "bin", "python"),
     ]
     return _first_existing(candidates)
 
@@ -384,8 +373,6 @@ def autodetect() -> Dict[str, Any]:
     tools = _detect_tools_dir(drives)
     if tools:
         paths["tools_dir"] = tools
-
-    paths.update(_detect_tripo(drives))
 
     # Drop empties so they don't override lower layers.
     paths = {k: v for k, v in paths.items() if v}
@@ -525,26 +512,6 @@ class Config:
     def launchers_dir(self) -> str:
         """Folder holding the ``.cmd`` launchers; defaults to the repo root."""
         return _norm(self._p("launchers_dir") or str(REPO_ROOT))
-
-    @property
-    def tripo_dir(self) -> str:
-        return _norm(self._p("tripo_dir"))
-
-    @property
-    def tripo_python(self) -> str:
-        return _norm(self._p("tripo_python"))
-
-    @property
-    def tripo_src_dir(self) -> str:
-        return _norm(self._p("tripo_src_dir"))
-
-    @property
-    def tripo_model_dir(self) -> str:
-        return _norm(self._p("tripo_model_dir"))
-
-    @property
-    def tripo_output_dir(self) -> str:
-        return _norm(self._p("tripo_output_dir"))
 
     @property
     def ollama_exe(self) -> str:
@@ -902,7 +869,6 @@ if __name__ == "__main__":
         ("ollama_models_dir", cfg.ollama_models_dir),
         ("system_python", cfg.system_python),
         ("aider_python", cfg.aider_python),
-        ("tripo_dir", cfg.tripo_dir),
         ("host", cfg.host),
         ("comfy_api", cfg.comfy_api),
         ("comfy_ws", cfg.comfy_ws),
