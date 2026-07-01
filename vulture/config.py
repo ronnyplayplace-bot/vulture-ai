@@ -110,7 +110,7 @@ DEFAULTS: Dict[str, Any] = {
 #: Human-readable service labels for the status panel (name -> port key).
 SERVICE_PORT_KEYS = {
     "Ollama": "ollama_port",
-    "Chat/Bilder (WebUI)": "webui_port",
+    "Chat/Images (WebUI)": "webui_port",
     "ComfyUI/FLUX": "comfy_port",
     "Code-RAG": "rag_port",
     "VPS-Tunnel": "tunnel_port",

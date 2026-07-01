@@ -4,11 +4,16 @@ import tkinter as tk
 from tkinter import font as tkfont, ttk, messagebox, filedialog
 import subprocess, socket, os, threading, webbrowser, json, urllib.request, time, random, io
 
-LOCALAPPDATA = os.environ.get("LOCALAPPDATA", r"C:\Users\User\AppData\Local")
-TOOLS = r"C:\Users\User\ai-memory-tools"
-COMFY_PY = r"D:\comfyui\venv\Scripts\python.exe"
-COMFY_API = "http://127.0.0.1:8188"
-OUTPUT_DIR = r"D:\comfyui\output"
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # find the vulture pkg
+from vulture.config import get_config
+cfg = get_config()
+
+# --- was hard-coded, now from config.json / auto-detect ---
+COMFY_PY   = cfg.comfy_python          # was r"D:\comfyui\venv\Scripts\python.exe"
+COMFY_API  = cfg.comfy_api             # was "http://127.0.0.1:8188"
+OUTPUT_DIR = cfg.output_dir            # was r"D:\comfyui\output"
+TOOLS      = cfg.tools_dir             # was r"C:\Users\User\ai-memory-tools"
 
 # ---- OVRLKD editorial dark-purple palette ----
 BG="#0a0a0a"; CARD="#1a1d27"; PANEL="#14141c"; DIV="#1c1c1c"
@@ -23,13 +28,13 @@ SUPPORT = [("BTC", "37W7Djk14P9kw3Gx3zWLNXpTyRcSJfrwSe"),
            ("USDT (BEP20)", "0x30d7d100fe6606a0860786dacb975c7f7723852c")]
 SUPPORT_URL = "https://github.com/ronnyplayplace-bot/vulture-ai"
 
-SERVICES = {"Ollama":11434, "Chat/Images (WebUI)":8080, "ComfyUI/FLUX":8188, "Code-RAG":8001, "VPS-Tunnel":8000}
+SERVICES = cfg.services
 
 NEG = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, worst quality, low quality, jpeg artifacts, signature, watermark, blurry, ugly, deformed, mutated"
 
 # Modell -> (engine, datei)  -- FLUX ist Standard (beste Qualitaet)
 MODELS = {
-    "FLUX  (best quality)":            ("flux", "flux1-schnell-Q4_K_S.gguf"),
+    "FLUX  (best quality)":            ("flux", cfg.model_flux_unet),
     "DreamShaper  (fast/draft)":       ("sd15", "DreamShaper_v8.safetensors"),
     "Realistic Vision  (photo, fast)": ("sd15","RealisticVision_v6.safetensors"),
     "ToonYou  (cartoon, fast)":        ("sd15", "ToonYou_v6.safetensors"),
@@ -48,15 +53,15 @@ SIZES = {
 
 def port_open(p):
     s=socket.socket(socket.AF_INET,socket.SOCK_STREAM); s.settimeout(0.3)
-    try: return s.connect_ex(("127.0.0.1",p))==0
+    try: return s.connect_ex((cfg.host,p))==0
     finally: s.close()
 
 def run_hidden(cmd): subprocess.Popen(cmd, shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
 def run_visible(cmd): subprocess.Popen(cmd, shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
 
 def ensure_comfy():
-    if not port_open(8188):
-        run_hidden(f'cd /d "D:\\comfyui\\ComfyUI" && "{COMFY_PY}" main.py --listen 127.0.0.1 --port 8188 --output-directory "{OUTPUT_DIR}" --cuda-device 0 --lowvram')
+    if not port_open(cfg.comfy_port):
+        run_hidden(cfg.comfy_start_command())
         return False
     return True
 
@@ -64,26 +69,26 @@ def free_memory():
     # ComfyUI neu starten = RAM wirklich frei (Torch gibt sonst nichts zurueck)
     try: urllib.request.urlopen(urllib.request.Request(f"{COMFY_API}/free",data=b'{"unload_models":true,"free_memory":true}',headers={"Content-Type":"application/json"}),timeout=5)
     except: pass
-    run_hidden('powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 8188 -State Listen -EA SilentlyContinue | %% { Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }"')
+    run_hidden(f'powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort {cfg.comfy_port} -State Listen -EA SilentlyContinue | %% {{ Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }}"')
 
-def start_all(): run_hidden(r'"D:\OVRLKD-Studio\OVRLKD-KI.cmd" silent')
+def start_all(): run_hidden(f'"{cfg.start_all_cmd}" silent')
 def stop_all():
     run_hidden('taskkill /F /IM open-webui.exe /T')
-    run_hidden('powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 8188,8080,8001,8000 -State Listen -EA SilentlyContinue | %% { Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }"')
+    run_hidden(f'powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort {cfg.comfy_port},{cfg.webui_port},{cfg.rag_port},{cfg.tunnel_port} -State Listen -EA SilentlyContinue | %% {{ Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }}"')
 
 def start_webui_and_open():
-    if not port_open(8080): run_hidden(f'"{TOOLS}\\start-webui.cmd"')
-    webbrowser.open("http://localhost:8080")
+    if not port_open(cfg.webui_port): run_hidden(f'"{os.path.join(cfg.tools_dir, "start-webui.cmd")}"')
+    webbrowser.open(cfg.webui_url)
 def _open_cmd(path):
     # zuverlaessig ein Konsolenfenster oeffnen (os.startfile startet .cmd im eigenen Fenster)
     try: os.startfile(path)
     except Exception:
         subprocess.Popen(f'start "OVRLKD" "{path}"', shell=True)
-def open_coder(): _open_cmd(r"D:\OVRLKD-Studio\KI-Coder.cmd")
-def open_status(): _open_cmd(r"D:\OVRLKD-Studio\KI-Status.cmd")
+def open_coder(): _open_cmd(cfg.coder_cmd)
+def open_status(): _open_cmd(cfg.status_cmd)
 def open_3d():
-    if os.path.exists(r"D:\tripo3d\TripoSR\run.py"): _open_cmd(r"D:\tripo3d\Bild-zu-3D.cmd")
-    else: _open_cmd(r"D:\tripo3d\1-Setup-3D-installieren.cmd")
+    if os.path.exists(os.path.join(cfg.tripo_src_dir, "run.py")): _open_cmd(os.path.join(cfg.tripo_dir, "Bild-zu-3D.cmd"))
+    else: _open_cmd(os.path.join(cfg.tripo_dir, "1-Setup-3D-installieren.cmd"))
 
 # ---------- Workflows ----------
 def wf_sd15(model, prompt, w, h, seed, hires=2.0):
@@ -104,17 +109,17 @@ def wf_sd15(model, prompt, w, h, seed, hires=2.0):
     return wf
 def wf_flux(prompt, w, h, seed):
     # Pascal-Optimierung: nutzt t5 Q8-GGUF wenn vorhanden (besser als fp8), sonst fp8-Fallback
-    t5gguf=r"D:\comfyui\ComfyUI\models\text_encoders\t5-v1_1-xxl-encoder-Q8_0.gguf"
+    t5gguf=cfg.flux_t5_gguf_path()
     if os.path.exists(t5gguf) and os.path.getsize(t5gguf)>1000000:
-        clip_node={"inputs":{"clip_name1":"t5-v1_1-xxl-encoder-Q8_0.gguf","clip_name2":"clip_l.safetensors","type":"flux"},"class_type":"DualCLIPLoaderGGUF"}
+        clip_node={"inputs":{"clip_name1":cfg.model_flux_t5_gguf,"clip_name2":cfg.model_flux_clip_l,"type":"flux"},"class_type":"DualCLIPLoaderGGUF"}
     else:
-        clip_node={"inputs":{"clip_name1":"t5xxl_fp8_e4m3fn.safetensors","clip_name2":"clip_l.safetensors","type":"flux"},"class_type":"DualCLIPLoader"}
+        clip_node={"inputs":{"clip_name1":cfg.model_flux_t5_fp8,"clip_name2":cfg.model_flux_clip_l,"type":"flux"},"class_type":"DualCLIPLoader"}
     return {
       "6":{"inputs":{"text":prompt,"clip":["11",0]},"class_type":"CLIPTextEncode"},
       "5":{"inputs":{"width":w,"height":h,"batch_size":1},"class_type":"EmptySD3LatentImage"},
       "11":clip_node,
-      "10":{"inputs":{"vae_name":"flux_ae.safetensors"},"class_type":"VAELoader"},
-      "12":{"inputs":{"unet_name":"flux1-schnell-Q4_K_S.gguf"},"class_type":"UnetLoaderGGUF"},
+      "10":{"inputs":{"vae_name":cfg.model_flux_vae},"class_type":"VAELoader"},
+      "12":{"inputs":{"unet_name":cfg.model_flux_unet},"class_type":"UnetLoaderGGUF"},
       "13":{"inputs":{"noise":["25",0],"guider":["22",0],"sampler":["16",0],"sigmas":["17",0],"latent_image":["5",0]},"class_type":"SamplerCustomAdvanced"},
       "22":{"inputs":{"model":["12",0],"conditioning":["6",0]},"class_type":"BasicGuider"},
       "16":{"inputs":{"sampler_name":"euler"},"class_type":"KSamplerSelect"},
@@ -144,9 +149,9 @@ def run_img2img(src_path, prompt, denoise, on_status, on_image):
         if not src_path or not os.path.exists(src_path): on_status("No source image."); return
         ensure_comfy()
         for _ in range(60):
-            if port_open(8188): break
+            if port_open(cfg.comfy_port): break
             time.sleep(2)
-        inp=r"D:\comfyui\ComfyUI\input"; os.makedirs(inp,exist_ok=True)
+        inp=cfg.comfy_input_dir; os.makedirs(inp,exist_ok=True)
         fn="to_img2img.png"; shutil.copy(src_path, os.path.join(inp,fn))
         seed=random.randint(0,2**31)
         wf=wf_img2img(fn, prompt or "high quality, detailed", "RealisticVision_v6.safetensors", denoise, seed)
@@ -163,7 +168,7 @@ def wf_upscale(infile, scale, ckpt, seed):
       "2":{"inputs":{"ckpt_name":ckpt},"class_type":"CheckpointLoaderSimple"},
       "3":{"inputs":{"text":"high quality, sharp focus, highly detailed, intricate detail, 8k","clip":["2",1]},"class_type":"CLIPTextEncode"},
       "4":{"inputs":{"text":"blurry, low quality, jpeg artifacts, oversharpened, deformed","clip":["2",1]},"class_type":"CLIPTextEncode"},
-      "5":{"inputs":{"model_name":"4x-UltraSharp.pth"},"class_type":"UpscaleModelLoader"},
+      "5":{"inputs":{"model_name":cfg.model_upscale},"class_type":"UpscaleModelLoader"},
       "6":{"inputs":{"image":["1",0],"model":["2",0],"positive":["3",0],"negative":["4",0],"vae":["2",2],
             "upscale_model":["5",0],"upscale_by":scale,"seed":seed,"steps":20,"cfg":6.0,
             "sampler_name":"dpmpp_2m","scheduler":"karras","denoise":0.3,
@@ -181,10 +186,10 @@ def run_upscale(src_path, scale, on_status, on_image):
             on_status("No image to upscale."); return
         ensure_comfy()
         for _ in range(60):
-            if port_open(8188): break
+            if port_open(cfg.comfy_port): break
             time.sleep(2)
         # ComfyUI laedt LoadImage aus input/ -> Bild dorthin kopieren
-        inp=r"D:\comfyui\ComfyUI\input"; os.makedirs(inp,exist_ok=True)
+        inp=cfg.comfy_input_dir; os.makedirs(inp,exist_ok=True)
         fn="to_upscale.png"; shutil.copy(src_path, os.path.join(inp,fn))
         seed=random.randint(0,2**31)
         wf=wf_upscale(fn, scale, "RealisticVision_v6.safetensors", seed)
@@ -201,7 +206,7 @@ def wf_faceswap(target_file, source_file, restore_model="codeformer.pth", visibi
       "2":{"inputs":{"image":source_file,"upload":"image"},"class_type":"LoadImage"},
       "3":{"inputs":{
             "enabled":True,"input_image":["1",0],"source_image":["2",0],
-            "swap_model":"inswapper_128.onnx","facedetection":"retinaface_resnet50",
+            "swap_model":cfg.model_swap,"facedetection":"retinaface_resnet50",
             "face_restore_model":restore_model,"face_restore_visibility":visibility,"codeformer_weight":0.5,
             "detect_gender_input":"no","detect_gender_source":"no",
             "input_faces_index":"0","source_faces_index":"0","console_log_level":1},
@@ -210,7 +215,7 @@ def wf_faceswap(target_file, source_file, restore_model="codeformer.pth", visibi
     }
 
 # Glaettungs-Stufe -> (CodeFormer-Modell, Sichtbarkeit)
-SWAP_RESTORE = {"none":("none",0.0), "light":("codeformer.pth",0.5), "strong":("codeformer.pth",1.0)}
+SWAP_RESTORE = {"none":("none",0.0), "light":(cfg.model_restore,0.5), "strong":(cfg.model_restore,1.0)}
 
 def run_faceswap(target_path, source_path, restore_key, on_status, on_image):
     import shutil
@@ -219,13 +224,13 @@ def run_faceswap(target_path, source_path, restore_key, on_status, on_image):
         if not target_path or not os.path.exists(target_path): on_status("No target image selected."); return
         ensure_comfy()
         for _ in range(60):
-            if port_open(8188): break
+            if port_open(cfg.comfy_port): break
             time.sleep(2)
-        inp=r"D:\comfyui\ComfyUI\input"; os.makedirs(inp,exist_ok=True)
+        inp=cfg.comfy_input_dir; os.makedirs(inp,exist_ok=True)
         te=os.path.splitext(target_path)[1].lower() or ".png"; se=os.path.splitext(source_path)[1].lower() or ".png"
         tn="swap_target"+te; sn="swap_source"+se
         shutil.copy(target_path, os.path.join(inp,tn)); shutil.copy(source_path, os.path.join(inp,sn))
-        model,vis=SWAP_RESTORE.get(restore_key,("codeformer.pth",1.0))
+        model,vis=SWAP_RESTORE.get(restore_key,(cfg.model_restore,1.0))
         wf=wf_faceswap(tn, sn, model, vis)
         path=comfy_run(wf, on_status, "Face swap")
         if path: on_status("Face swapped!"); on_image(path)
@@ -283,9 +288,9 @@ def run_lipsync(source_path, driving_path, expressiveness, on_status, on_done):
         if not driving_path or not os.path.exists(driving_path): on_status("No driving video selected."); return
         ensure_comfy()
         for _ in range(60):
-            if port_open(8188): break
+            if port_open(cfg.comfy_port): break
             time.sleep(2)
-        inp=r"D:\comfyui\ComfyUI\input"; os.makedirs(inp,exist_ok=True)
+        inp=cfg.comfy_input_dir; os.makedirs(inp,exist_ok=True)
         se=os.path.splitext(source_path)[1].lower() or ".png"
         sn="lp_src"+se; dn="lp_drive.mp4"
         shutil.copy(source_path, os.path.join(inp,sn)); shutil.copy(driving_path, os.path.join(inp,dn))
@@ -303,10 +308,10 @@ def enhance_prompt(user_text):
          "Describe ONLY what should be visible: subject, setting, style, lighting, mood, details. "
          "No instructions like 'create/make', no aspect ratio, no quotes, no explanation, no thinking. "
          "Output ONLY the final prompt as a single line.")
-    body=json.dumps({"model":"qwen2.5-coder:7b","prompt":user_text,"system":sys,"stream":False,
+    body=json.dumps({"model":cfg.enhance_model,"prompt":user_text,"system":sys,"stream":False,
                      "keep_alive":0,  # Modell sofort aus VRAM entladen -> Platz fuer FLUX (6GB!)
                      "options":{"temperature":0.6,"num_predict":300}}).encode()
-    req=urllib.request.Request("http://127.0.0.1:11434/api/generate",data=body,headers={"Content-Type":"application/json"})
+    req=urllib.request.Request(f"{cfg.ollama_api}/api/generate",data=body,headers={"Content-Type":"application/json"})
     out=json.loads(urllib.request.urlopen(req,timeout=150).read()).get("response","")
     import re as _re
     out=_re.sub(r"<think>.*?</think>","",out,flags=_re.DOTALL).strip().strip('"').strip()
@@ -319,7 +324,7 @@ def comfy_run(wf, on_status, label="Generating"):
     pid=json.loads(urllib.request.urlopen(urllib.request.Request(f"{COMFY_API}/prompt",
         data=json.dumps({"prompt":wf,"client_id":cid}).encode(),headers={"Content-Type":"application/json"}),timeout=30).read())["prompt_id"]
     try:
-        ws=_ws.WebSocket(); ws.connect(f"ws://127.0.0.1:8188/ws?clientId={cid}",timeout=10); ws.settimeout(5)
+        ws=_ws.WebSocket(); ws.connect(f"{cfg.comfy_ws}?clientId={cid}",timeout=10); ws.settimeout(5)
     except Exception:
         ws=None
     done=False; t0=time.time()
@@ -354,18 +359,15 @@ def comfy_run(wf, on_status, label="Generating"):
 
 def generate(engine, model_file, prompt, w, h, hires, on_status, on_image):
     try:
-        on_status("Starting ComfyUI..." if not port_open(8188) else "Sending to AI...")
+        on_status("Starting ComfyUI..." if not port_open(cfg.comfy_port) else "Sending to AI...")
         if not ensure_comfy():
             for _ in range(60):
-                if port_open(8188): break
+                if port_open(cfg.comfy_port): break
                 time.sleep(2)
             time.sleep(3)
         # FLUX-Dateien da?
         if engine=="flux":
-            need=[r"D:\comfyui\ComfyUI\models\unet\flux1-schnell-Q4_K_S.gguf",
-                  r"D:\comfyui\ComfyUI\models\text_encoders\t5xxl_fp8_e4m3fn.safetensors",
-                  r"D:\comfyui\ComfyUI\models\text_encoders\clip_l.safetensors",
-                  r"D:\comfyui\ComfyUI\models\vae\flux_ae.safetensors"]
+            need=cfg.flux_required_files()
             if not all(os.path.exists(p) and os.path.getsize(p)>1000000 for p in need):
                 on_status("FLUX still downloading - please try later."); return
         seed=random.randint(0,2**31)
@@ -679,8 +681,8 @@ def open_generator():
 # ---------- Bild -> 3D Fenster (mit Datei-Auswahl) ----------
 def open_3d_window():
     from PIL import Image, ImageTk
-    if not os.path.exists(r"D:\tripo3d\TripoSR\run.py"):
-        _open_cmd(r"D:\tripo3d\1-Setup-3D-installieren.cmd"); return
+    if not os.path.exists(os.path.join(cfg.tripo_src_dir, "run.py")):
+        _open_cmd(os.path.join(cfg.tripo_dir, "1-Setup-3D-installieren.cmd")); return
     win=tk.Toplevel(root); win.title("OVRLKD - Image to 3D"); win.configure(bg=BG)
     win.geometry("560x640"); win.lift(); win.focus_force()
     make_frameless(win, "OVRLKD - Image to 3D", win.destroy)
@@ -724,13 +726,13 @@ def open_3d_window():
                 except: pass
                 set_st("Generating 3D model...")
                 mcres=DETAIL.get(det_var.get(),256)
-                cmd=[r"D:\tripo3d\venv\Scripts\python.exe","run.py",win._img,"--output-dir",r"D:\tripo3d\output","--model-save-format","obj","--mc-resolution",str(mcres),"--pretrained-model-name-or-path",r"D:\tripo3d\model"]
+                cmd=[cfg.tripo_python,"run.py",win._img,"--output-dir",cfg.tripo_output_dir,"--model-save-format","obj","--mc-resolution",str(mcres),"--pretrained-model-name-or-path",cfg.tripo_model_dir]
                 if tex_var.get(): cmd[6:6]=["--bake-texture","--texture-resolution","1024"]
-                r=subprocess.run(cmd,cwd=r"D:\tripo3d\TripoSR",capture_output=True,text=True,creationflags=subprocess.CREATE_NO_WINDOW)
-                out=r"D:\tripo3d\output\0\mesh.obj"
+                r=subprocess.run(cmd,cwd=cfg.tripo_src_dir,capture_output=True,text=True,creationflags=subprocess.CREATE_NO_WINDOW)
+                out=os.path.join(cfg.tripo_output_dir, "0", "mesh.obj")
                 if os.path.exists(out):
                     set_st("DONE! mesh.obj created. Opening folder.")
-                    os.startfile(r"D:\tripo3d\output\0")
+                    os.startfile(os.path.join(cfg.tripo_output_dir, "0"))
                 else:
                     set_st("3D creation error (image may be unsuitable).")
             except Exception as e: set_st(f"Error: {e}")
@@ -740,7 +742,7 @@ def open_3d_window():
     go=tk.Button(win,text="\U0001f9ca  Create 3D model",font=btn_f,bg=ACCENT,fg="#ffffff",relief="flat",cursor="hand2",command=do3d,activebackground=ACCENT_DK,activeforeground="#ffffff")
     go.pack(fill="x",padx=24,pady=(4,4))
     tk.Button(win,text="\U0001f4c1 Open 3D folder",font=small_f,bg=CARD,fg=SUB,relief="flat",cursor="hand2",
-        command=lambda:os.startfile(r"D:\tripo3d\output") if os.path.exists(r"D:\tripo3d\output") else None).pack(pady=(0,10))
+        command=lambda:os.startfile(cfg.tripo_output_dir) if os.path.exists(cfg.tripo_output_dir) else None).pack(pady=(0,10))
 
 # ---------- Gesicht tauschen (Face-Swap) Fenster ----------
 def open_faceswap_window():
