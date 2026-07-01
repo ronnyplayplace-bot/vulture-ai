@@ -1322,15 +1322,24 @@ def open_setup_window():
         for w in models_frame.winfo_children():
             try: w.destroy()
             except Exception: pass
-        tk.Label(models_frame,text="Estimated on YOUR hardware (rough — real speed varies):",
-                 font=small_f,bg=BG,fg=SUB).pack(anchor="w",pady=(2,2))
+        tk.Label(models_frame,text="Estimated on YOUR hardware (rough — real speed varies) · click a group to expand:",
+                 font=small_f,bg=BG,fg=SUB,wraplength=640,justify="left").pack(anchor="w",pady=(2,4))
         for gname,rows in groups:
-            tk.Label(models_frame,text=gname,font=small_f,bg=BG,fg=ACCENT).pack(anchor="w",pady=(5,1))
+            gframe=tk.Frame(models_frame,bg=BG); gframe.pack(fill="x",pady=(3,0))
+            hdr=tk.Label(gframe,text=f"▸  {gname}   ({len(rows)})",font=small_f,bg=CARD,fg=ACCENT_LT,
+                         anchor="w",cursor="hand2",padx=10,pady=5)
+            hdr.pack(fill="x")
+            rowsfr=tk.Frame(gframe,bg=BG)  # collapsed by default (not packed yet)
             for nm,sz,op in rows:
                 est=_setup_estimate(op,mult); size=_setup_fmt_size(sz)
                 parts=[p for p in (nm,size,est) if p]
-                tk.Label(models_frame,text="  "+"  ·  ".join(parts),font=small_f,
-                         bg=BG,fg=FG,anchor="w",wraplength=640,justify="left").pack(anchor="w")
+                tk.Label(rowsfr,text="   "+"  ·  ".join(parts),font=small_f,
+                         bg=BG,fg=FG,anchor="w",wraplength=610,justify="left").pack(anchor="w")
+            def _toggle(e=None,rf=rowsfr,h=hdr,gn=gname,n=len(rows),st={"open":False}):
+                st["open"]=not st["open"]
+                if st["open"]: rf.pack(fill="x",padx=(6,0),pady=(2,5)); h.config(text=f"▾  {gn}   ({n})")
+                else: rf.pack_forget(); h.config(text=f"▸  {gn}   ({n})")
+            hdr.bind("<Button-1>",_toggle)
 
     def detect_worker():
         gpu=detect_gpu(); ram=detect_ram_gb()
@@ -1521,7 +1530,7 @@ def open_setup_window():
 # themselves, what it downloads from original sources, or the non-commercial
 # model licenses. Shown once on first launch (until "I understand"), and always
 # reachable from the footer "📋 Licenses" link and inside ⚙ Setup.
-def open_requirements_window():
+def open_requirements_window(first_run=False):
     win=tk.Toplevel(root); win.title("Overlkd - Requirements & licenses"); win.configure(bg=BG)
     win.geometry("720x780"); win.minsize(620,620); win.resizable(True,True)
     win.lift(); win.focus_force()
@@ -1534,16 +1543,23 @@ def open_requirements_window():
 
     # --- Fixed footer (packed before the scroll body so it stays visible) ---
     footer=tk.Frame(win,bg=BG); footer.pack(side="bottom",fill="x")
-    def _ack():
+    def _ack_and_setup():
         try: _write_config_key("runtime","requirements_ack",True)
         except Exception: pass
         win.destroy()
-    ack_btn=tk.Button(footer,text="✓  I understand — continue",font=btn_f,bg=ACCENT,fg="#ffffff",
+        root.after(200, open_setup_window)   # continue straight to the install screen
+    def _ack_close():
+        try: _write_config_key("runtime","requirements_ack",True)
+        except Exception: pass
+        win.destroy()
+    _btxt = "✓  I understand — continue to Setup" if first_run else "✓  I understand — close"
+    ack_btn=tk.Button(footer,text=_btxt,font=btn_f,bg=ACCENT,fg="#ffffff",
                       relief="flat",cursor="hand2",activebackground=ACCENT_DK,activeforeground="#ffffff",
-                      command=_ack)
+                      command=(_ack_and_setup if first_run else _ack_close))
     ack_btn.pack(fill="x",padx=24,pady=(8,2))
-    tk.Label(footer,text="You can reopen this anytime from ⚙ Setup.",
-             font=small_f,bg=BG,fg=SUB).pack(pady=(0,10))
+    tk.Label(footer,text=("Next step → ⚙ Setup: pick your drive, then Install everything." if first_run
+                          else "You can reopen this anytime from ⚙ Setup."),
+             font=small_f,bg=BG,fg=(ACCENT_LT if first_run else SUB)).pack(pady=(0,10))
 
     # --- Scrollable body: content is long (same pattern as open_setup_window) ---
     _scwrap=tk.Frame(win,bg=BG); _scwrap.pack(fill="both",expand=True)
@@ -1668,6 +1684,6 @@ def open_requirements_window():
 try: _req_ack=bool(cfg._r("requirements_ack"))
 except Exception: _req_ack=False
 if not _req_ack:
-    root.after(500, open_requirements_window)
+    root.after(500, lambda: open_requirements_window(first_run=True))
 
 root.mainloop()
