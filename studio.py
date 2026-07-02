@@ -64,16 +64,31 @@ def ensure_comfy():
         return False
     return True
 
+# Only ever kill OUR service processes (ComfyUI/RAG run as python, chat as
+# open-webui) -- a user's unrelated app on the same port must survive "Stop all".
+# NOTE: this must be written with ForEach-Object, not the % alias: these strings
+# go through cmd.exe (shell=True), where %% reaches PowerShell literally and the
+# whole pipeline dies with CommandNotFoundException (the old buttons did nothing).
+_SERVICE_PROC_RE = "^(python\\w*|open-webui.*|uvicorn.*)$"
+
+def _kill_port_listeners(*ports):
+    plist = ",".join(str(p) for p in ports)
+    ps = ("Get-NetTCPConnection -LocalPort " + plist + " -State Listen -EA SilentlyContinue | "
+          "ForEach-Object { $p = Get-Process -Id $_.OwningProcess -EA SilentlyContinue; "
+          "if ($p -and $p.ProcessName -match '" + _SERVICE_PROC_RE + "') "
+          "{ Stop-Process -Id $p.Id -Force -EA SilentlyContinue } }")
+    run_hidden(f'powershell -NoProfile -Command "{ps}"')
+
 def free_memory():
     # Restarting ComfyUI actually frees the RAM (Torch gives nothing back otherwise)
     try: urllib.request.urlopen(urllib.request.Request(f"{COMFY_API}/free",data=b'{"unload_models":true,"free_memory":true}',headers={"Content-Type":"application/json"}),timeout=5)
     except: pass
-    run_hidden(f'powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort {cfg.comfy_port} -State Listen -EA SilentlyContinue | %% {{ Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }}"')
+    _kill_port_listeners(cfg.comfy_port)
 
 def start_all(): run_hidden(f'"{cfg.start_all_cmd}" silent')
 def stop_all():
     run_hidden('taskkill /F /IM open-webui.exe /T')
-    run_hidden(f'powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort {cfg.comfy_port},{cfg.webui_port},{cfg.rag_port} -State Listen -EA SilentlyContinue | %% {{ Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }}"')
+    _kill_port_listeners(cfg.comfy_port, cfg.webui_port, cfg.rag_port)
 
 def start_webui_and_open():
     # Open WebUI launcher lives in the repo's rag/ (written by setup/install.py).
@@ -108,10 +123,8 @@ def start_rag_service(visible=False):
     return False
 
 def stop_service_port(port):
-    """Stop whatever local service is listening on ``port`` (kill its process)."""
-    run_hidden('powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort '
-               f'{port} -State Listen -EA SilentlyContinue | %% {{ Stop-Process '
-               '-Id $_.OwningProcess -Force -EA SilentlyContinue }}"')
+    """Stop the local service listening on ``port`` (name-filtered kill)."""
+    _kill_port_listeners(port)
 
 def studio_update():
     """One-click update: ``git pull`` in the Studio folder. Only works when Vulture
@@ -368,15 +381,22 @@ def enhance_prompt(user_text):
     return out
 
 def comfy_run(wf, on_status, label="Generating"):
-    # Sends the workflow + shows LIVE percent via websocket, returns the image path
-    import websocket as _ws
+    # Sends the workflow + shows LIVE percent via websocket, returns the image path.
+    # websocket-client is optional: without it there is no live %, but the
+    # history-polling fallback below still completes the job.
+    try:
+        import websocket as _ws
+    except ImportError:
+        _ws=None
     cid=str(random.randint(1,2**31))
     pid=json.loads(urllib.request.urlopen(urllib.request.Request(f"{COMFY_API}/prompt",
         data=json.dumps({"prompt":wf,"client_id":cid}).encode(),headers={"Content-Type":"application/json"}),timeout=30).read())["prompt_id"]
-    try:
-        ws=_ws.WebSocket(); ws.connect(f"{cfg.comfy_ws}?clientId={cid}",timeout=10); ws.settimeout(5)
-    except Exception:
-        ws=None
+    ws=None
+    if _ws is not None:
+        try:
+            ws=_ws.WebSocket(); ws.connect(f"{cfg.comfy_ws}?clientId={cid}",timeout=10); ws.settimeout(5)
+        except Exception:
+            ws=None
     done=False; t0=time.time()
     while not done:
         if time.time()-t0>2400: break  # 40min limit (upscaling on 6GB with many tiles takes a while)
@@ -430,6 +450,22 @@ def generate(engine, model_file, prompt, w, h, hires, on_status, on_image):
         on_status(f"Error: {e}")
 
 # ---------------- GUI ----------------
+def _load_pil():
+    """Import Pillow lazily; return (Image, ImageTk) or None with a visible hint.
+    Without this guard a missing Pillow kills the image windows silently under
+    pythonw (the Tk callback traceback goes to an invisible stderr)."""
+    try:
+        from PIL import Image, ImageTk
+        return Image, ImageTk
+    except ImportError:
+        py=sys.executable.replace("pythonw.exe","python.exe")
+        messagebox.showwarning("Missing component",
+            "Pillow is not installed for the Studio's Python, so this window "
+            "cannot show images.\n\nFix (one line in a terminal):\n"
+            f'    "{py}" -m pip install pillow websocket-client\n\n'
+            "...or run ⚙ Setup → Install everything (it installs these too).")
+        return None
+
 root=tk.Tk(); root.title("Vulture AI"); root.configure(bg=BG)
 # App icon (Vulture AI logo) for the title bar / Alt-Tab / taskbar.
 _APPDIR=os.path.dirname(os.path.abspath(__file__))
@@ -610,7 +646,7 @@ for i in range(2): left.columnconfigure(i,weight=1)
 for i in range(6): left.rowconfigure(i,weight=1)
 
 # Start spans the full width
-make_card(left,0,0,"▶","START ALL","Boot up services",lambda:(flash("⏳ Starting services — ComfyUI · RAG · Chat (~15 s, then a browser tab opens)…"),start_all()),base=ACCENT,fg="#ffffff").grid(columnspan=2,sticky="nsew")
+make_card(left,0,0,"▶","START ALL","Boot up services",lambda:(flash("⏳ Starting services — ComfyUI · RAG · Chat (~15 s; the dots on the right turn green)…"),start_all()),base=ACCENT,fg="#ffffff").grid(columnspan=2,sticky="nsew")
 make_card(left,1,0,"\U0001f3a8","Create images","Text in, image out",lambda:open_generator())
 make_card(left,1,1,"\U0001f4ac","Chat","Local AI models",lambda:(flash("⏳ Starting chat (Open WebUI)… first run builds up ~60-90 s, then the tab opens."),start_webui_and_open()))
 make_card(left,2,0,"\U0001f4bb","Coding agent","Aider (terminal)",lambda:(flash("⏳ Opening the coding agent… first run loads the model into VRAM - give it a moment."),open_coder()))
@@ -647,7 +683,9 @@ refresh()
 
 # ---------- Image generator window ----------
 def open_generator():
-    from PIL import Image, ImageTk
+    pil=_load_pil()
+    if not pil: return
+    Image, ImageTk = pil
     win=tk.Toplevel(root); win.title("Overlkd - Create images"); win.configure(bg=BG)
     win.geometry("760x860"); win.minsize(560,640); win.resizable(True,True)
     win.lift(); win.focus_force()
@@ -704,7 +742,6 @@ def open_generator():
         if not getattr(win,"_last_path",None): set_status("Generate or load an image first."); return
         threading.Thread(target=lambda:run_upscale(win._last_path,scale,set_status,show_image),daemon=True).start()
     def load_and_4k():
-        from PIL import Image, ImageTk
         f=filedialog.askopenfilename(title="Load image to upscale",initialdir=OUTPUT_DIR,
             filetypes=[("Images","*.png *.jpg *.jpeg *.webp"),("All","*.*")])
         if not f: return
@@ -762,7 +799,9 @@ def open_generator():
 
 # ---------- Face swap window ----------
 def open_faceswap_window():
-    from PIL import Image, ImageTk
+    pil=_load_pil()
+    if not pil: return
+    Image, ImageTk = pil
     win=tk.Toplevel(root); win.title("Overlkd - Face swap"); win.configure(bg=BG)
     win.geometry("640x760"); win.minsize(560,680); win.lift(); win.focus_force()
     make_frameless(win, "Vulture AI — Face swap", win.destroy)
@@ -833,7 +872,9 @@ def open_faceswap_window():
 
 # ---------- Lip sync (LivePortrait) window ----------
 def open_lipsync_window():
-    from PIL import Image, ImageTk
+    pil=_load_pil()
+    if not pil: return
+    Image, ImageTk = pil
     win=tk.Toplevel(root); win.title("Overlkd - Lip sync"); win.configure(bg=BG)
     win.geometry("640x620"); win.minsize(560,560); win.lift(); win.focus_force()
     make_frameless(win, "Vulture AI — Lip sync", win.destroy)
@@ -1033,8 +1074,10 @@ def open_rag_window():
                         out.insert("end","No matches yet. Index a project or repo above, then search.\n","body")
                     for it in res:
                         src=it.get("source","?"); sc=it.get("score",0.0)
+                        proj=it.get("project") or ""
                         txt=(it.get("text","") or "").strip()
-                        out.insert("end",f"{src}   ","src"); out.insert("end",f"{sc:.2f}\n","score")
+                        label=f"{proj} · {src}" if proj else src
+                        out.insert("end",f"{label}   ","src"); out.insert("end",f"{sc:.2f}\n","score")
                         out.insert("end",(txt[:420]+("…" if len(txt)>420 else ""))+"\n\n","body")
                     out.config(state="disabled")
                 win.after(0,render); set_st(f"{len(res)} result(s).")
@@ -1477,7 +1520,12 @@ def open_setup_window():
     # be present first. The "Check what's missing" (--list) button stays available.
     OLLAMA_EXE=os.path.join(os.environ.get("LOCALAPPDATA",""),"Programs","Ollama","ollama.exe")
     def _ollama_ready():
-        return port_open(cfg.ollama_port) or os.path.exists(OLLAMA_EXE)
+        # Running, on PATH, at the config-detected location, or at the default
+        # install path -- any of these counts (don't block users who installed
+        # Ollama somewhere non-standard).
+        return (port_open(cfg.ollama_port) or bool(shutil.which("ollama"))
+                or (cfg.ollama_exe and os.path.exists(cfg.ollama_exe))
+                or os.path.exists(OLLAMA_EXE))
     def do_install():
         if not _ollama_ready():
             set_st("Install the Ollama desktop app first (ollama.com) — Vulture needs it for the local LLMs.")
@@ -1590,7 +1638,7 @@ def open_requirements_window(first_run=False):
         out["python"]=bool(shutil.which("python"))
         out["git"]=bool(shutil.which("git"))
         exe=os.path.join(os.environ.get("LOCALAPPDATA",""),"Programs","Ollama","ollama.exe")
-        try: out["ollama"]=bool(port_open(11434) or os.path.exists(exe))
+        try: out["ollama"]=bool(port_open(cfg.ollama_port) or shutil.which("ollama") or os.path.exists(exe))
         except Exception: out["ollama"]=os.path.exists(exe)
         try: out["free_gb"]=shutil.disk_usage(_APPDIR).free/(1024**3)
         except Exception: out["free_gb"]=0.0

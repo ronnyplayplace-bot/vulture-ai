@@ -66,6 +66,10 @@ def main() -> int:
         ("WEBUI_PORT",    cfg.webui_port),
         ("RAG_PORT",      cfg.rag_port),
         ("OLLAMA_PORT",   cfg.ollama_port),
+        # -- runtime (so launchers match the studio's ComfyUI flags: an RTX
+        #    card must not be started with a hardcoded --lowvram) --
+        ("COMFY_VRAM_FLAG", cfg.comfy_vram_flag),
+        ("CUDA_DEVICE",     cfg.cuda_device),
     ]
 
     # print() -> Windows text mode turns "\n" into CRLF, which batch for/f reads

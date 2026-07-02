@@ -9,10 +9,12 @@
   "_paths_note": "target_relative_path is relative to the resolved target_base. For ollama entries it is the model tag and target_base is 'ollama'.",
 
   "comfyui": {
-    "_comment": "How to create the ComfyUI install + its venv when it is missing. Only used by the 'comfyui' bootstrap step. torch is pinned to the cu121 build that the RTX playbook validated (works on Pascal GTX 10xx through Ampere RTX 30xx).",
+    "_comment": "How to create the ComfyUI install + its venv when it is missing. Only used by the 'comfyui' bootstrap step. torch is pinned to the cu121 build that the RTX playbook validated (works on Pascal GTX 10xx through Ada RTX 40xx). Blackwell cards (RTX 50xx, compute capability >= 10) need cu128 wheels -- the installer switches to the *_blackwell entries automatically.",
     "repo": "https://github.com/comfyanonymous/ComfyUI.git",
     "torch_index_url": "https://download.pytorch.org/whl/cu121",
     "torch_packages": ["torch==2.5.1", "torchvision==0.20.1", "torchaudio==2.5.1"],
+    "torch_index_url_blackwell": "https://download.pytorch.org/whl/cu128",
+    "torch_packages_blackwell": ["torch==2.7.1", "torchvision==0.22.1", "torchaudio==2.7.1"],
     "requirements": "requirements.txt"
   },
 

@@ -47,6 +47,8 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models as qm
 from fastembed import TextEmbedding
 
+from chunking import chunk_text, est_tokens
+
 
 # --------------------------------------------------------------------------- #
 # Configuration (environment-driven, drive-agnostic local defaults)
@@ -107,30 +109,7 @@ def save_projects(p: Dict[str, Any]) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Chunking
-# --------------------------------------------------------------------------- #
-def chunk_text(text: str, target_tokens: int = 1500, overlap_tokens: int = 150) -> List[str]:
-    """Word-based chunker (~0.75 words/token). Targets 1000-2000 tokens/chunk."""
-    words = text.split()
-    if not words:
-        return []
-    wpc = max(50, int(target_tokens * 0.75))
-    ov = max(0, int(overlap_tokens * 0.75))
-    out, i = [], 0
-    while i < len(words):
-        out.append(" ".join(words[i:i + wpc]))
-        if i + wpc >= len(words):
-            break
-        i += (wpc - ov)
-    return out
-
-
-def est_tokens(text: str) -> int:
-    return int(len(text.split()) / 0.75) + 1
-
-
-# --------------------------------------------------------------------------- #
-# Embedding
+# Embedding  (chunking lives in chunking.py -- sized for the 512-token model)
 # --------------------------------------------------------------------------- #
 def embed_docs(texts: List[str]) -> List[List[float]]:
     return [v.tolist() for v in state["emb"].embed(texts)]
@@ -277,14 +256,23 @@ def get_project(name: str, authorization: Optional[str] = Header(None)):
 
 
 @app.delete("/projects/{name}")
-def delete_project(name: str, authorization: Optional[str] = Header(None)):
+def delete_project(name: str, types: Optional[str] = None,
+                   authorization: Optional[str] = Header(None)):
+    """Delete a project's chunks. ``?types=code`` (comma list) limits deletion to
+    those chunk types and keeps the registry entry -- ingest.py uses this to
+    clear the old code index before re-indexing (no duplicates), while chat
+    memory stored under the same project name survives."""
     check_auth(authorization)
+    if name in ALL_PROJECTS:
+        raise HTTPException(400, "refusing to delete across all projects")
+    tlist = [t.strip() for t in types.split(",") if t.strip()] if types else None
     c = state["client"]
-    c.delete(COLLECTION, points_selector=qm.FilterSelector(filter=_filter(name, None)))
-    projects = load_projects()
-    projects.pop(name, None)
-    save_projects(projects)
-    return {"deleted": name}
+    c.delete(COLLECTION, points_selector=qm.FilterSelector(filter=_filter(name, tlist)))
+    if not tlist:
+        projects = load_projects()
+        projects.pop(name, None)
+        save_projects(projects)
+    return {"deleted": name, "types": tlist or "all"}
 
 
 def _store(project: str, mtype: str, text: str, source: Optional[str] = None,
@@ -331,6 +319,7 @@ def search(s: SearchIn, authorization: Optional[str] = Header(None)):
     ).points
     return {"results": [{
         "score": round(h.score, 4),
+        "project": h.payload.get("project"),
         "type": h.payload.get("type"),
         "source": h.payload.get("source"),
         "ts": h.payload.get("ts"),

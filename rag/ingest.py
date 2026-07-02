@@ -26,6 +26,7 @@ import os
 import sys
 import time
 import json
+import urllib.parse
 import urllib.request
 
 API_URL = os.getenv("MEMORY_API_URL", "http://127.0.0.1:8001")
@@ -54,6 +55,24 @@ def post(path, payload):
         return json.loads(r.read())
 
 
+def clear_code_index(project):
+    """Drop the project's previous *code* chunks (chat memory survives).
+
+    Without this every re-index of the same project piles duplicate chunks
+    into the store. Best-effort: on any error (first index, server down)
+    indexing simply proceeds."""
+    headers = {}
+    if API_KEY:
+        headers["Authorization"] = f"Bearer {API_KEY}"
+    url = f"{API_URL}/projects/{urllib.parse.quote(project, safe='')}?types=code"
+    req = urllib.request.Request(url, headers=headers, method="DELETE")
+    try:
+        with urllib.request.urlopen(req, timeout=120):
+            print(f"Cleared previous code index of '{project}'.")
+    except Exception:
+        pass
+
+
 def main():
     if len(sys.argv) < 3:
         print("Usage: ingest.py <project_name> <path>")
@@ -63,6 +82,7 @@ def main():
         print("Path not found:", root)
         sys.exit(1)
 
+    clear_code_index(project)
     files, chunks, skipped, bytes_sent = 0, 0, 0, 0
     t0 = time.time()
     for dirpath, dirnames, filenames in os.walk(root):

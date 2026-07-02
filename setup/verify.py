@@ -47,7 +47,7 @@ MANIFEST_PATH = Path(__file__).resolve().parent / "models.manifest.json"
 NODE_CLASS_PROBES = {
     "ComfyUI-GGUF": "UnetLoaderGGUF",
     "ComfyUI_UltimateSDUpscale": "UltimateSDUpscale",
-    "comfyui-reactor-node": "ReActorFaceSwap",
+    "ComfyUI-ReActor": "ReActorFaceSwap",
     "ComfyUI-LivePortraitKJ": "LivePortraitProcess",
     "ComfyUI-VideoHelperSuite": "VHS_LoadVideo",
 }

@@ -47,11 +47,15 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from vulture.config import (  # noqa: E402
-    Config, load_config, _available_drives, _norm, _rag_base_dir,
+    Config, load_config, _available_drives, _norm, _rag_base_dir, query_gpu,
 )
 
 MANIFEST_PATH = Path(__file__).resolve().parent / "models.manifest.json"
-STEP_ORDER = ["comfyui", "nodes", "models", "ollama", "aider", "webui", "rag", "config"]
+STEP_ORDER = ["comfyui", "nodes", "models", "ollama", "aider", "webui", "rag", "studio", "config"]
+
+#: Every fail() lands here so the SUMMARY + exit code reflect step errors too
+#: (a failed ComfyUI clone must not end in "Setup complete").
+FAILURES: List[str] = []
 
 
 # --------------------------------------------------------------------------- #
@@ -79,6 +83,7 @@ def warn(msg: str) -> None:
 
 
 def fail(msg: str) -> None:
+    FAILURES.append(msg)
     print(f"  [FAIL] {msg}")
 
 
@@ -178,12 +183,29 @@ def source_page(src: Dict[str, Any]) -> str:
     return src.get("url") or src.get("repo", "")
 
 
+def _dir_has_payload(path: str, min_bytes: int = 1_000_000) -> bool:
+    """True if the directory holds at least one real file >= ``min_bytes``.
+
+    Dot-dirs (e.g. huggingface_hub's ``.cache``) are ignored: an interrupted
+    snapshot download leaves only ``.cache`` behind and must NOT count as
+    installed, or the model is skipped forever on re-runs."""
+    for root, dirs, files in os.walk(path):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for fn in files:
+            try:
+                if os.path.getsize(os.path.join(root, fn)) >= min_bytes:
+                    return True
+            except OSError:
+                pass
+    return False
+
+
 def is_present(entry: Dict[str, Any], path: str) -> bool:
-    """Existence check: file >1MB, or non-empty directory (snapshots/zip extracts)."""
+    """Existence check: file >1MB, or a directory with real payload files."""
     if not os.path.exists(path):
         return False
     if os.path.isdir(path):
-        return any(os.scandir(path))
+        return _dir_has_payload(path)
     return os.path.getsize(path) > 1_000_000
 
 
@@ -312,6 +334,13 @@ def step_comfyui(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
     run([venv_py, "-m", "pip", "install", "--upgrade", "pip"], check=False)
     torch_pkgs = spec.get("torch_packages", [])
     index = spec.get("torch_index_url")
+    # Blackwell (RTX 50xx, compute capability >= 10): the cu121 wheels have no
+    # sm_120 kernels -- torch would import but refuse to run on the GPU.
+    gpu = query_gpu()
+    if gpu and gpu.get("compute_cap", 0) >= 10.0 and spec.get("torch_packages_blackwell"):
+        info(f"Blackwell GPU detected (compute {gpu['compute_cap']}) -> using cu128 torch")
+        torch_pkgs = spec["torch_packages_blackwell"]
+        index = spec.get("torch_index_url_blackwell", index)
     if torch_pkgs:
         cmd = [venv_py, "-m", "pip", "install", *torch_pkgs]
         if index:
@@ -340,7 +369,8 @@ def step_nodes(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
         fail("no ComfyUI dir known -- run the comfyui step first.")
         return
     nodes_dir = os.path.join(comfy_dir, "custom_nodes")
-    os.makedirs(nodes_dir, exist_ok=True)
+    if not args.readonly:  # --list/--dry-run must not create stray folders
+        os.makedirs(nodes_dir, exist_ok=True)
 
     if not shutil.which("git"):
         fail("git not found on PATH -- cannot clone nodes.")
@@ -428,7 +458,8 @@ def _download_hf_file(repo: str, filename: str, dest_dir: str, rename_to: Option
     got_abs = os.path.abspath(got)
     if os.path.abspath(final) != got_abs:
         os.makedirs(os.path.dirname(final), exist_ok=True)
-        shutil.copyfile(got_abs, final)
+        # rename, don't copy -- copyfile left a multi-GB duplicate behind
+        os.replace(got_abs, final)
     return final
 
 
@@ -459,6 +490,8 @@ def _download_url(url: str, dest: str, expected_mb: Optional[float]) -> str:
             os.replace(tmp, dest)
             return dest
         r.raise_for_status()
+        if pos and r.status_code != 206:
+            pos = 0  # server ignored the Range header -> appending would corrupt; restart
         total = int(r.headers.get("Content-Length", 0)) + pos
         mode = "ab" if pos else "wb"
         with open(tmp, mode) as fh, tqdm(
@@ -779,16 +812,28 @@ def step_aider(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
 # --------------------------------------------------------------------------- #
 # STEP 5b - Open WebUI (local chat frontend for Ollama, ~7 GB, Python 3.11)
 # --------------------------------------------------------------------------- #
-def _write_start_webui_cmd(live: Config, venv_dir: str, webui_data: str) -> None:
+def _default_chat_model(manifest: Dict[str, Any], live: Config) -> str:
+    """The manifest's default chat tier (the one flagged ``default``), so the
+    launcher env and the seeded DB config agree on the same starting model."""
+    for m in manifest.get("models", []):
+        cp = m.get("chat_profile") or {}
+        if cp.get("default") and m.get("source", {}).get("type") == "ollama":
+            return m["target_relative_path"]
+    return live.coder_model or "qwen2.5-coder:7b"
+
+
+def _write_start_webui_cmd(live: Config, venv_dir: str, webui_data: str,
+                           default_model: str) -> None:
     """(Re)write rag/start-webui.cmd + start-webui.vbs from resolved config.
 
-    Runs uvicorn directly (not `open-webui serve`) so we can pass --no-access-log
-    -- that is the only way to silence the per-request console flood. pythonw +
-    a VBS shim = no console window at all. Single local user (no login)."""
+    SECURITY: `open-webui serve` defaults to binding 0.0.0.0 -- with
+    WEBUI_AUTH=False that would expose an admin chat (incl. code-executing
+    Functions) to the whole LAN. Always pass --host 127.0.0.1 here.
+    pythonw + a VBS shim = no console window at all. Single local user (no login)."""
     port = live.webui_port
+    host = live.host or "127.0.0.1"
     ollama = live.ollama_api or "http://127.0.0.1:11434"
     exe = os.path.join(venv_dir, "Scripts", "open-webui.exe")
-    default_model = (live.coder_model or "qwen2.5-coder:7b")
     out = REPO_ROOT / "rag" / "start-webui.cmd"
     lines = [
         "@echo off",
@@ -806,7 +851,9 @@ def _write_start_webui_cmd(live: Config, venv_dir: str, webui_data: str) -> None
         # open-webui serve sets its own secret keys + runs migrations. The studio
         # launches this via start-webui.vbs (window style 0 -> no visible console,
         # so the request-log chatter is never seen). Run the .cmd directly to debug.
-        f'"{exe}" serve --port {port}',
+        # --host 127.0.0.1 is mandatory (see the docstring): no-auth admin chat
+        # must never listen on the network.
+        f'"{exe}" serve --host {host} --port {port}',
     ]
     out.write_text("\r\n".join(lines) + "\r\n", encoding="ascii", errors="replace")
     ok(f"wrote {out}")
@@ -849,14 +896,16 @@ def _seed_webui_function(live: Config, venv_py: str, webui_data: str,
         # first admin if needed (the runtime launcher keeps signup off).
         "WEBUI_AUTH": "False", "ENABLE_SIGNUP": "True", "DEFAULT_USER_ROLE": "admin",
         "WEBUI_ADMIN_EMAIL": "admin@localhost", "WEBUI_ADMIN_PASSWORD": "admin",
-        "DEFAULT_MODELS": live.coder_model or "qwen2.5-coder:7b",
+        "DEFAULT_MODELS": _default_chat_model(manifest, live),
         "GLOBAL_LOG_LEVEL": "WARNING", "DO_NOT_TRACK": "true", "SCARF_NO_ANALYTICS": "true",
     })
     info("pre-configuring Open WebUI (default model + chat-memory filter)...")
     webui_exe = os.path.join(os.path.dirname(venv_py), "open-webui.exe")
-    boot_cmd = ([webui_exe, "serve", "--port", str(live.webui_port)]
+    # Loopback-only, even for this transient warm-boot (signup is enabled here).
+    serve_args = ["serve", "--host", "127.0.0.1", "--port", str(live.webui_port)]
+    boot_cmd = ([webui_exe, *serve_args]
                 if os.path.exists(webui_exe)
-                else [venv_py, "-m", "open_webui", "serve", "--port", str(live.webui_port)])
+                else [venv_py, "-m", "open_webui", *serve_args])
     proc = subprocess.Popen(
         boot_cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
@@ -1008,10 +1057,38 @@ def step_webui(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
         os.makedirs(webui_data, exist_ok=True)
     except OSError:
         pass
-    _write_start_webui_cmd(live, venv_dir, webui_data)
+    _write_start_webui_cmd(live, venv_dir, webui_data, _default_chat_model(manifest, live))
     _seed_webui_function(live, venv_py, webui_data, manifest)
     ok(f"Open WebUI ready (turnkey: no login, Ollama connected, memory filter on). "
        f"Chat card / rag\\start-webui.vbs (port {live.webui_port}).")
+
+
+# --------------------------------------------------------------------------- #
+# STEP 5c - Studio GUI runtime deps (into the SYSTEM Python that runs studio.py)
+# --------------------------------------------------------------------------- #
+STUDIO_DEPS = ["pillow", "websocket-client"]
+
+
+def step_studio(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
+                args: argparse.Namespace) -> None:
+    banner("STEP 5c  Studio GUI dependencies (Pillow + websocket-client)")
+    live = _live_config(cfg, state)
+    # studio.py runs on the system Python (the .lnk / Overlkd-Studio.cmd use it),
+    # NOT in any venv: Pillow renders the image previews, websocket-client streams
+    # the live render progress. Without this step a fresh machine gets a studio
+    # whose image windows silently fail to open.
+    base_py = live.system_python or sys.executable
+    if args.readonly:
+        info(f"(read-only) would pip install {' '.join(STUDIO_DEPS)} into {base_py}")
+        return
+    run([base_py, "-m", "pip", "install",
+         "--upgrade-strategy", "only-if-needed", *STUDIO_DEPS], check=False)
+    rc = run([base_py, "-c", "import PIL, websocket"], check=False)
+    if rc == 0:
+        ok("studio deps ready (Pillow + websocket-client)")
+    else:
+        warn("Pillow/websocket-client still not importable -- the studio will "
+             "show a fix hint when an image window is opened.")
 
 
 # --------------------------------------------------------------------------- #
@@ -1150,6 +1227,21 @@ def make_shortcuts(cfg: Config) -> int:
 # --------------------------------------------------------------------------- #
 # Orchestration
 # --------------------------------------------------------------------------- #
+def _python_version(py: str) -> Optional[Tuple[int, int]]:
+    """(major, minor) of the interpreter at ``py``, or None if undeterminable."""
+    try:
+        if os.path.abspath(py) == os.path.abspath(sys.executable):
+            return sys.version_info[:2]
+        out = subprocess.run(
+            [py, "-c", "import sys;print('%d.%d' % sys.version_info[:2])"],
+            capture_output=True, text=True, timeout=30,
+        ).stdout.strip()
+        major, minor = out.split(".")
+        return int(major), int(minor)
+    except Exception:
+        return None
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(
         description="Vulture AI bootstrap installer (idempotent).",
@@ -1212,6 +1304,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.shortcut:
         return make_shortcuts(cfg)
 
+    # Hard version gate for real installs: every venv (Open WebUI is 3.11-only)
+    # is created from this base Python, and a 3.13 base produces installs that
+    # "finish" but don't work. --list / --dry-run stay usable on any version.
+    if not args.readonly:
+        base_py = cfg.system_python or sys.executable
+        vi = _python_version(base_py)
+        if vi and not ((3, 11) <= vi <= (3, 12)):
+            fail(f"Python {vi[0]}.{vi[1]} at {base_py} -- Vulture needs Python 3.11 (3.12 also works).")
+            info("Install Python 3.11 64-bit from https://www.python.org/downloads/")
+            info("(tick 'Add python.exe to PATH'), then re-run the installer.")
+            return 1
+
     banner("Vulture AI  --  bootstrap installer")
     info(f"repo root      : {REPO_ROOT}")
     info(f"config source  : {cfg.source}")
@@ -1242,6 +1346,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             step_webui(cfg, state, manifest, args)
         elif step == "rag":
             step_rag(cfg, state, manifest, args)
+        elif step == "studio":
+            step_studio(cfg, state, manifest, args)
         elif step == "config":
             step_config(cfg, state, manifest, args)
         else:
@@ -1264,6 +1370,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             warn(f"    - {n}")
         warn("Re-run 'Install everything' to retry -- it resumes and re-tries only "
              "what's still missing (nothing already downloaded is re-fetched).")
+    # Step-level errors (failed clones, missing git, ...) must fail the run too --
+    # otherwise INSTALL.cmd reports "Setup complete" over a broken install.
+    if FAILURES and not args.readonly:
+        warn(f"{len(FAILURES)} step error(s):")
+        for f in FAILURES:
+            warn(f"    - {f}")
 
     # After a real install, drop a 'Vulture AI' launcher (with the logo) so the
     # user starts from a proper app icon, not a .cmd. Best-effort; never fails the run.
@@ -1274,7 +1386,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             warn(f"could not create the app launcher: {exc}")
 
     print("\n  Next: python setup/verify.py   (checks the whole install)\n")
-    return 1 if failed else 0
+    return 1 if (failed or (FAILURES and not args.readonly)) else 0
 
 
 if __name__ == "__main__":

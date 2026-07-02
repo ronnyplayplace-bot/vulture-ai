@@ -16,6 +16,15 @@ set "PYEXE=python"
 where python >nul 2>nul || set "PYEXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
 "%PYEXE%" --version >nul 2>nul
 if errorlevel 1 goto no_python
+REM Wrong version? (3.13+ breaks Open WebUI.) Prefer a real 3.11 install if present.
+"%PYEXE%" -c "import sys; raise SystemExit(0 if (3,11) <= sys.version_info[:2] <= (3,12) else 1)" >nul 2>nul
+if errorlevel 1 (
+    if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
+        set "PYEXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+    ) else (
+        goto wrong_python
+    )
+)
 echo [ok] Python found:
 "%PYEXE%" --version
 
@@ -41,6 +50,17 @@ exit /b 0
 echo.
 echo [X] Python was not found.
 echo     Install Python 3.11 64-bit, and TICK "Add python.exe to PATH".
+echo     Opening the download page...
+start "" https://www.python.org/downloads/
+echo.
+pause
+exit /b 1
+
+:wrong_python
+echo.
+echo [X] Your Python is not 3.11/3.12 - Open WebUI needs Python 3.11.
+echo     Install Python 3.11 64-bit ALONGSIDE your current one (TICK
+echo     "Add python.exe to PATH"), then run INSTALL.cmd again.
 echo     Opening the download page...
 start "" https://www.python.org/downloads/
 echo.

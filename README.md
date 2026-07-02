@@ -33,7 +33,7 @@ no terminal.
 - 🔍 **4K upscaling** — 4x-UltraSharp + tiled Ultimate SD Upscale (real detail)
 - 🖼️ **img2img** reworking
 - 🎭 **Face-swap** (ReActor) and 👄 **lip-sync / talking photos** (LivePortrait)
-- 💬 **Local chat** — Ollama (Qwen, DeepSeek-R1, vision models) + Open WebUI
+- 💬 **Local chat** — Ollama (Qwen, DeepSeek-R1) + Open WebUI
 - 💻 **Local coding agent** — Aider + local models, with an auto test→repair loop
   and an **auto-splitter** that breaks a big prompt into small steps so weaker
   local models don't choke

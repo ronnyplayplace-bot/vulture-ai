@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # Windows runner: Vulture is Windows-first (paths, launchers).
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Byte-compile everything
+        run: python -m compileall -q studio.py setup rag vulture auto-tune-ctx.py coding-orchestrator.py setup-project-coding.py
+      - name: Unit tests
+        run: |
+          pip install pytest
+          pytest tests -q
