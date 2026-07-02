@@ -19,7 +19,7 @@ TOOLS      = cfg.tools_dir             # was r"C:\Users\User\ai-memory-tools"
 # ---- Overlkd editorial dark-purple palette ----
 BG="#0a0a0a"; CARD="#1a1d27"; PANEL="#14141c"; DIV="#1c1c1c"
 ACCENT="#9b5dff"; ACCENT_LT="#c084fc"; ACCENT_DK="#5a3aef"
-FG="#f0f0f0"; SUB="#888888"; GREEN="#3ddc84"; RED="#ff4d4d"
+FG="#f0f0f0"; SUB="#888888"; GREEN="#3ddc84"; RED="#ff4d4d"; AMBER="#ffb020"
 
 SLOGANS = ["We build things others overlook.",
            "It sees everything - nothing leaves your machine.",
@@ -32,6 +32,26 @@ GAME_NAME = "By My Side"
 GAME_URL = "https://store.steampowered.com/app/4859700/By_My_Side/"
 
 SERVICES = cfg.services
+
+# ---- "still booting" state for the status dots -------------------------------
+# A started service takes a while before its port opens (Open WebUI: 1-2 min).
+# Without this the dot stays red with zero feedback and users think it failed.
+# mark_starting() flags a service until its expected boot deadline; refresh()
+# shows it amber ⏳ until the port opens (green) or the deadline passes (red).
+_starting = {}
+_STARTING_SECS = {cfg.ollama_port: 30, cfg.comfy_port: 120,
+                  cfg.webui_port: 180, cfg.rag_port: 90}
+
+def mark_starting(*ports):
+    now = time.time()
+    for label, port in SERVICES.items():
+        if port in ports and not port_open(port):  # already-running stays green
+            _starting[label] = now + _STARTING_SECS.get(port, 90)
+
+def clear_starting(*ports):
+    for label, port in SERVICES.items():
+        if port in ports:
+            _starting.pop(label, None)
 
 NEG = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, worst quality, low quality, jpeg artifacts, signature, watermark, blurry, ugly, deformed, mutated"
 
@@ -61,6 +81,7 @@ def run_visible(cmd): subprocess.Popen(cmd, shell=True, creationflags=subprocess
 def ensure_comfy():
     if not port_open(cfg.comfy_port):
         run_hidden(cfg.comfy_start_command())
+        mark_starting(cfg.comfy_port)
         return False
     return True
 
@@ -85,10 +106,13 @@ def free_memory():
     except: pass
     _kill_port_listeners(cfg.comfy_port)
 
-def start_all(): run_hidden(f'"{cfg.start_all_cmd}" silent')
+def start_all():
+    run_hidden(f'"{cfg.start_all_cmd}" silent')
+    mark_starting(cfg.ollama_port, cfg.comfy_port, cfg.webui_port, cfg.rag_port)
 def stop_all():
     run_hidden('taskkill /F /IM open-webui.exe /T')
     _kill_port_listeners(cfg.comfy_port, cfg.webui_port, cfg.rag_port)
+    _starting.clear()
 
 def start_webui_and_open():
     # Open WebUI launcher lives in the repo's rag/ (written by setup/install.py).
@@ -96,10 +120,27 @@ def start_webui_and_open():
     # fall back to the .cmd. Not the old cross-project cfg.tools_dir path.
     d=os.path.dirname(os.path.abspath(__file__))
     vbs=os.path.join(d,"rag","start-webui.vbs"); cmd=os.path.join(d,"rag","start-webui.cmd")
-    if not port_open(cfg.webui_port):
-        if os.path.exists(vbs): run_hidden(f'wscript "{vbs}"')
-        elif os.path.exists(cmd): run_hidden(f'"{cmd}"')
-    webbrowser.open(cfg.webui_url)
+    if port_open(cfg.webui_port):
+        webbrowser.open(cfg.webui_url); return
+    if os.path.exists(vbs): run_hidden(f'wscript "{vbs}"')
+    elif os.path.exists(cmd): run_hidden(f'"{cmd}"')
+    else:
+        flash("Chat is not installed yet — open ⚙ Setup → Install everything."); return
+    mark_starting(cfg.webui_port)
+    # Open the browser only once the chat actually answers -- a tab pointing at a
+    # dead port with zero feedback reads as "broken". The amber ⏳ dot + these
+    # footer updates show that it is still booting.
+    def waiter():
+        for i in range(90):  # 90 x 2s = 3 min
+            if port_open(cfg.webui_port):
+                root.after(0,lambda:(flash("✅ Chat is ready — opening it now…"),
+                                     webbrowser.open(cfg.webui_url)))
+                return
+            if i and i % 10 == 0:  # footer heartbeat every ~20s
+                root.after(0,lambda w=i*2:flash(f"⏳ Chat is still booting… ({w}s — first start takes 1-2 min)"))
+            time.sleep(2)
+        root.after(0,lambda:flash("Chat did not start within 3 min — run rag\\start-webui.cmd directly to see the error."))
+    threading.Thread(target=waiter,daemon=True).start()
 def _open_cmd(path):
     # reliably open a console window (os.startfile launches the .cmd in its own window)
     try: os.startfile(path)
@@ -120,11 +161,13 @@ def start_rag_service(visible=False):
     if os.path.exists(cmd):
         if visible: _open_cmd(cmd)
         else: run_hidden(f'"{cmd}"')
+        mark_starting(cfg.rag_port)
     return False
 
 def stop_service_port(port):
     """Stop the local service listening on ``port`` (name-filtered kill)."""
     _kill_port_listeners(port)
+    clear_starting(port)
 
 def studio_update():
     """One-click update: ``git pull`` in the Studio folder. Only works when Vulture
@@ -646,7 +689,7 @@ for i in range(2): left.columnconfigure(i,weight=1)
 for i in range(6): left.rowconfigure(i,weight=1)
 
 # Start spans the full width
-make_card(left,0,0,"▶","START ALL","Boot up services",lambda:(flash("⏳ Starting services — ComfyUI · RAG · Chat (~15 s; the dots on the right turn green)…"),start_all()),base=ACCENT,fg="#ffffff").grid(columnspan=2,sticky="nsew")
+make_card(left,0,0,"▶","START ALL","Boot up services",lambda:(flash("⏳ Starting services — amber ⏳ dot = still booting (Chat takes 1-2 min)…",ms=12000),start_all()),base=ACCENT,fg="#ffffff").grid(columnspan=2,sticky="nsew")
 make_card(left,1,0,"\U0001f3a8","Create images","Text in, image out",lambda:open_generator())
 make_card(left,1,1,"\U0001f4ac","Chat","Local AI models",lambda:(flash("⏳ Starting chat (Open WebUI)… first run builds up ~60-90 s, then the tab opens."),start_webui_and_open()))
 make_card(left,2,0,"\U0001f4bb","Coding agent","Aider (terminal)",lambda:(flash("⏳ Opening the coding agent… first run loads the model into VRAM - give it a moment."),open_coder()))
@@ -657,12 +700,12 @@ make_card(left,4,0,"\U0001f50e","Code search","Index & search your own code — 
 
 # ---- Right column: service status + memory/stop ----
 tk.Label(right,text="SERVICES",font=small_f,bg=BG,fg=SUB).pack(anchor="w",pady=(2,4))
-status_labels={}
+status_labels={}; status_texts={}
 for name in SERVICES:
     row=tk.Frame(right,bg=BG); row.pack(fill="x",pady=1)
     dot=tk.Label(row,text="●",font=small_f,bg=BG,fg=RED); dot.pack(side="left")
-    tk.Label(row,text=" "+name,font=small_f,bg=BG,fg=SUB,anchor="w").pack(side="left")
-    status_labels[name]=dot
+    txt=tk.Label(row,text=" "+name,font=small_f,bg=BG,fg=SUB,anchor="w"); txt.pack(side="left")
+    status_labels[name]=dot; status_texts[name]=txt
 
 tk.Frame(right,bg=BG,height=12).pack()
 free_f=tk.Frame(right,bg="#16241c",cursor="hand2"); free_f.pack(fill="x",pady=4)
@@ -676,8 +719,20 @@ tk.Label(upd_f,text="⟳  Update (GitHub)",font=small_f,bg="#161a24",fg=ACCENT_L
 for w in [upd_f]+list(upd_f.winfo_children()): w.bind("<Button-1>",lambda e:(flash("⟳ Updating from GitHub… (git pull)"),studio_update()))
 
 def refresh():
+    # Three dot states: green = running, amber ⏳ = started but still booting
+    # (until its expected-boot deadline), red = off / failed to come up.
+    now=time.time()
     for name,port in SERVICES.items():
-        status_labels[name].config(fg=GREEN if port_open(port) else RED)
+        if port_open(port):
+            _starting.pop(name,None)
+            status_labels[name].config(fg=GREEN)
+            status_texts[name].config(text=" "+name,fg=SUB)
+        elif _starting.get(name,0) > now:
+            status_labels[name].config(fg=AMBER)
+            status_texts[name].config(text=" "+name+"  ⏳",fg=AMBER)
+        else:
+            status_labels[name].config(fg=RED)
+            status_texts[name].config(text=" "+name,fg=SUB)
     root.after(3000,refresh)
 refresh()
 
