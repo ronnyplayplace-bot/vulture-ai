@@ -27,25 +27,30 @@ echo ==========================================================
 echo    Overlkd Coding Agent  (Aider + local models)
 echo ==========================================================
 echo.
-echo   Choose a model:
-echo   [1] qwen3.5:9b         (NEW, best choice - ideal from a 1080 Ti up)
-echo   [2] qwen2.5-coder:7b   (code specialist, runs on 6GB)
-echo   [3] qwen3.5:4b         (NEW, fast, 256K context)
-echo   [4] qwen3:14b          (largest, slow)
-echo   [5] deepseek-r1:7b     (debugging + reasoning)
+echo   Choose a model for your hardware:
+echo   [1] Super Fast   qwen2.5:3b        (4 GB GPU / any laptop)
+echo   [2] Fast         qwen3.5:4b        (6 GB GPU - GTX 1060/1660)
+echo   [3] Better       qwen3.5:9b        (8-12 GB GPU)
+echo   [4] Best         qwen3:14b         (12 GB+ GPU / lots of RAM)
+echo   [5] Coding       qwen2.5-coder:7b  (code specialist, ~6 GB)
+echo   [6] Reasoning    deepseek-r1:7b    (debugging + logic)
 echo.
-REM Default = the preferred qwen3.5:9b IF it's actually installed, otherwise the
-REM always-present qwen2.5-coder:7b -- so a fresh clone works on Enter either way.
-set "DEF=2"
-ollama list 2>nul | findstr /I "qwen3.5:9b" >nul && set "DEF=1"
-set /p "MODELL_WAHL=Model [1-5, Enter=!DEF!]: "
-if "!MODELL_WAHL!"=="" set "MODELL_WAHL=!DEF!"
-if "!MODELL_WAHL!"=="1" set "MODELL=ollama_chat/qwen3.5:9b"
-if "!MODELL_WAHL!"=="2" set "MODELL=ollama_chat/qwen2.5-coder:7b"
-if "!MODELL_WAHL!"=="3" set "MODELL=ollama_chat/qwen3.5:4b"
+REM Default = Coding (the code specialist, runs on 6GB). Enter picks it.
+set "MODELL_WAHL="
+set /p "MODELL_WAHL=Model [1-6, Enter=5 Coding]: "
+if "!MODELL_WAHL!"=="" set "MODELL_WAHL=5"
+if "!MODELL_WAHL!"=="1" set "MODELL=ollama_chat/qwen2.5:3b"
+if "!MODELL_WAHL!"=="2" set "MODELL=ollama_chat/qwen3.5:4b"
+if "!MODELL_WAHL!"=="3" set "MODELL=ollama_chat/qwen3.5:9b"
 if "!MODELL_WAHL!"=="4" set "MODELL=ollama_chat/qwen3:14b"
-if "!MODELL_WAHL!"=="5" set "MODELL=ollama_chat/deepseek-r1:7b"
+if "!MODELL_WAHL!"=="5" set "MODELL=ollama_chat/qwen2.5-coder:7b"
+if "!MODELL_WAHL!"=="6" set "MODELL=ollama_chat/deepseek-r1:7b"
 if "!MODELL!"=="" set "MODELL=ollama_chat/qwen2.5-coder:7b"
+
+REM Make sure the chosen model is actually downloaded, else pull it now -- so aider
+REM never hits a 404 for a model that isn't installed yet.
+for /f "tokens=2 delims=/" %%m in ("!MODELL!") do set "RAWMODEL=%%m"
+ollama show "!RAWMODEL!" >nul 2>nul || ( echo. & echo First use of !RAWMODEL! - downloading it once... & ollama pull "!RAWMODEL!" )
 
 echo.
 echo ==========================================================

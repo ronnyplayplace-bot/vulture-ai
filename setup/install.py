@@ -817,10 +817,12 @@ def _write_start_webui_cmd(live: Config, venv_dir: str, webui_data: str) -> None
     vbs.write_text(vbs_body, encoding="ascii", errors="replace")
 
 
-def _seed_webui_function(live: Config, venv_py: str, webui_data: str) -> None:
-    """Warm-boot Open WebUI once to make it turnkey: persist the Ollama connection +
-    default model, and import + globally enable the Chat-RAG memory filter. All
-    best-effort -- on any failure the UI still works, just not pre-seeded."""
+def _seed_webui_function(live: Config, venv_py: str, webui_data: str,
+                         manifest: Dict[str, Any]) -> None:
+    """Warm-boot Open WebUI once to make it turnkey: persist the Ollama connection,
+    import + globally enable the Chat-RAG memory filter, and build the curated chat
+    model profiles (friendly English tiers, raw models hidden, default = fastest).
+    All best-effort -- on any failure the UI still works, just not pre-seeded."""
     import json as _json, time as _time
     import urllib.request as _u, urllib.error as _ue
     filt = REPO_ROOT / "rag" / "openwebui" / "ai_memory_filter.py"
@@ -889,21 +891,71 @@ def _seed_webui_function(live: Config, venv_py: str, webui_data: str) -> None:
         if not token:
             warn("could not obtain an Open WebUI admin token -- skipped filter import.")
             return
-        # Use create itself as the idempotency signal (a by-id GET returns 401, not
-        # 404, for a missing function -- unreliable). On a fresh install create
-        # succeeds -> then enable + make global. On a re-run it fails because the id
-        # exists -> it's already configured, so leave the toggles alone.
+        # --- 1) Chat-memory filter: import + enable globally. create is the
+        # idempotency signal (a by-id GET returns 401 not 404). Re-run: 401 taken.
         content = filt.read_text(encoding="utf-8")
         try:
             _api("POST", "/api/v1/functions/create", token=token, body={
                 "id": "ai_memory", "name": "Chat Memory (local RAG)", "content": content,
                 "meta": {"description": "Local RAG long-term chat memory", "manifest": {}}})
+            _api("POST", "/api/v1/functions/id/ai_memory/toggle", token=token)
+            _api("POST", "/api/v1/functions/id/ai_memory/toggle/global", token=token)
+            ok("chat-memory filter imported + enabled")
         except _ue.HTTPError:
-            ok("Open WebUI chat-memory filter already present.")
-            return
-        _api("POST", "/api/v1/functions/id/ai_memory/toggle", token=token)
-        _api("POST", "/api/v1/functions/id/ai_memory/toggle/global", token=token)
-        ok("Open WebUI pre-configured: default model + chat-memory filter enabled.")
+            ok("chat-memory filter already present")
+
+        # --- 2) Curated chat model profiles: friendly English tiers, raw base models
+        # hidden, default = the tier flagged 'default'. Data-driven from the manifest's
+        # chat_profile entries. All idempotent (create -> 401 taken -> update).
+        EMO = {"Super Fast": "⚡", "Fast": "\U0001f680", "Better": "⚖️",
+               "Best": "\U0001f9e0", "Coding": "\U0001f4bb", "Reasoning": "\U0001f52c"}
+        PUBLIC = [{"principal_type": "user", "principal_id": "*", "permission": "read"}]
+
+        def _upsert(body):
+            try:
+                _api("POST", "/api/v1/models/create", token=token, body=body)
+            except _ue.HTTPError:
+                try:
+                    _api("POST", "/api/v1/models/model/update", token=token, body=body)
+                except Exception:
+                    pass
+
+        profs = sorted(
+            [m for m in manifest.get("models", [])
+             if m.get("chat_profile") and m.get("source", {}).get("type") == "ollama"],
+            key=lambda m: m["chat_profile"].get("order", 99))
+        order_ids, default_id = [], None
+        for m in profs:
+            cp = m["chat_profile"]
+            tag = m["target_relative_path"]
+            wid = cp["name"].lower().replace(" ", "-")
+            order_ids.append(wid)
+            if cp.get("default"):
+                default_id = wid
+            label = (EMO.get(cp["name"], "") + " " + cp["name"]).strip()
+            _upsert({"id": wid, "base_model_id": tag, "name": label,
+                     "meta": {"description": cp.get("hint", ""),
+                              "profile_image_url": None, "capabilities": None},
+                     "params": {}, "access_grants": PUBLIC, "is_active": True})
+            # hide the raw base model (override row with is_active=False)
+            _upsert({"id": tag, "base_model_id": None, "name": tag,
+                     "meta": {}, "params": {}, "access_grants": PUBLIC, "is_active": False})
+        # drop the built-in arena entry so only our tiers show
+        try:
+            _api("POST", "/api/v1/evaluations/config", token=token,
+                 body={"ENABLE_EVALUATION_ARENA_MODELS": False})
+        except Exception:
+            pass
+        # default model + display order
+        if default_id:
+            try:
+                _api("POST", "/api/v1/configs/models", token=token,
+                     body={"DEFAULT_MODELS": default_id, "DEFAULT_PINNED_MODELS": None,
+                           "MODEL_ORDER_LIST": order_ids})
+            except Exception:
+                pass
+        ok(f"Open WebUI turnkey: {len(profs)} chat profiles, raw models hidden, "
+           f"default = {default_id or 'n/a'}.")
     except Exception as exc:
         warn(f"Open WebUI pre-config skipped ({exc}); the UI still works.")
     finally:
@@ -957,7 +1009,7 @@ def step_webui(cfg: Config, state: Dict[str, str], manifest: Dict[str, Any],
     except OSError:
         pass
     _write_start_webui_cmd(live, venv_dir, webui_data)
-    _seed_webui_function(live, venv_py, webui_data)
+    _seed_webui_function(live, venv_py, webui_data, manifest)
     ok(f"Open WebUI ready (turnkey: no login, Ollama connected, memory filter on). "
        f"Chat card / rag\\start-webui.vbs (port {live.webui_port}).")
 

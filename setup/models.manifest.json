@@ -250,49 +250,64 @@
     },
 
     {
-      "name": "Ollama: qwen2.5-coder:7b",
+      "name": "Ollama: qwen2.5:3b (Super Fast)",
+      "source": { "type": "ollama" },
+      "target_base": "ollama",
+      "target_relative_path": "qwen2.5:3b",
+      "approx_size_mb": 1900,
+      "license_note": "Apache-2.0. Tiny + quick -- runs on a 4GB GPU or plain CPU. The safe default for unknown/weak hardware.",
+      "required": true,
+      "chat_profile": { "name": "Super Fast", "order": 1, "hint": "4 GB GPU / any laptop", "default": true }
+    },
+    {
+      "name": "Ollama: qwen3.5:4b (Fast)",
+      "source": { "type": "ollama" },
+      "target_base": "ollama",
+      "target_relative_path": "qwen3.5:4b",
+      "approx_size_mb": 3400,
+      "license_note": "Fast, long-context. Fits a 6GB card (GTX 1060/1660).",
+      "required": true,
+      "chat_profile": { "name": "Fast", "order": 2, "hint": "6 GB GPU" }
+    },
+    {
+      "name": "Ollama: qwen3.5:9b (Better)",
+      "source": { "type": "ollama" },
+      "target_base": "ollama",
+      "target_relative_path": "qwen3.5:9b",
+      "approx_size_mb": 6600,
+      "license_note": "Strong all-round assistant. Needs ~8GB VRAM (RTX 3060/4060).",
+      "required": true,
+      "chat_profile": { "name": "Better", "order": 3, "hint": "8-12 GB GPU" }
+    },
+    {
+      "name": "Ollama: qwen3:14b (Best)",
+      "source": { "type": "ollama" },
+      "target_base": "ollama",
+      "target_relative_path": "qwen3:14b",
+      "approx_size_mb": 9300,
+      "license_note": "Top general quality. Needs 12GB+ VRAM or a big-RAM CPU rig.",
+      "required": true,
+      "chat_profile": { "name": "Best", "order": 4, "hint": "12 GB+ GPU / lots of RAM" }
+    },
+    {
+      "name": "Ollama: qwen2.5-coder:7b (Coding)",
       "source": { "type": "ollama" },
       "target_base": "ollama",
       "target_relative_path": "qwen2.5-coder:7b",
       "approx_size_mb": 4700,
-      "license_note": "Apache-2.0. REQUIRED: powers the 'optimise prompt' feature and is the default coding model on 6GB.",
-      "required": true
+      "license_note": "Apache-2.0. Code specialist; also powers the image prompt-optimiser. Runs on ~6GB.",
+      "required": true,
+      "chat_profile": { "name": "Coding", "order": 5, "hint": "code specialist, ~6 GB" }
     },
     {
-      "name": "Ollama: qwen3.5:9b",
-      "source": { "type": "ollama" },
-      "target_base": "ollama",
-      "target_relative_path": "qwen3.5:9b",
-      "approx_size_mb": 5600,
-      "license_note": "Author's preferred local coder (12GB+). If the tag is not in the Ollama library on your date, keep qwen2.5-coder as coder_model.",
-      "required": false
-    },
-    {
-      "name": "Ollama: qwen3.5:4b",
-      "source": { "type": "ollama" },
-      "target_base": "ollama",
-      "target_relative_path": "qwen3.5:4b",
-      "approx_size_mb": 2800,
-      "license_note": "Fast, long-context. Optional.",
-      "required": false
-    },
-    {
-      "name": "Ollama: qwen3:14b",
-      "source": { "type": "ollama" },
-      "target_base": "ollama",
-      "target_relative_path": "qwen3:14b",
-      "approx_size_mb": 9000,
-      "license_note": "Larger chat model. Optional (needs 12GB+).",
-      "required": false
-    },
-    {
-      "name": "Ollama: deepseek-r1:7b",
+      "name": "Ollama: deepseek-r1:7b (Reasoning)",
       "source": { "type": "ollama" },
       "target_base": "ollama",
       "target_relative_path": "deepseek-r1:7b",
       "approx_size_mb": 4700,
-      "license_note": "MIT. Reasoning / debugging. Optional.",
-      "required": false
+      "license_note": "MIT. Step-by-step reasoning / debugging. Runs on ~6GB.",
+      "required": true,
+      "chat_profile": { "name": "Reasoning", "order": 6, "hint": "math/logic, ~6 GB" }
     }
   ]
 }
