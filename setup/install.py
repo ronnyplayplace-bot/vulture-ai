@@ -928,18 +928,18 @@ def _seed_webui_function(live: Config, venv_py: str, webui_data: str,
         for m in profs:
             cp = m["chat_profile"]
             tag = m["target_relative_path"]
-            wid = cp["name"].lower().replace(" ", "-")
-            order_ids.append(wid)
+            order_ids.append(tag)
             if cp.get("default"):
-                default_id = wid
+                default_id = tag
             label = (EMO.get(cp["name"], "") + " " + cp["name"]).strip()
-            _upsert({"id": wid, "base_model_id": tag, "name": label,
+            # IN-PLACE rename of the real base model (base_model_id=None + is_active=True
+            # => overrides its display name/meta while keeping it usable). A separate
+            # preset pointing at a hidden base 404s with "Model not found" -- do NOT do
+            # that. This shows exactly the friendly tier names, and chat works.
+            _upsert({"id": tag, "base_model_id": None, "name": label,
                      "meta": {"description": cp.get("hint", ""),
                               "profile_image_url": None, "capabilities": None},
                      "params": {}, "access_grants": PUBLIC, "is_active": True})
-            # hide the raw base model (override row with is_active=False)
-            _upsert({"id": tag, "base_model_id": None, "name": tag,
-                     "meta": {}, "params": {}, "access_grants": PUBLIC, "is_active": False})
         # drop the built-in arena entry so only our tiers show
         try:
             _api("POST", "/api/v1/evaluations/config", token=token,
@@ -954,7 +954,7 @@ def _seed_webui_function(live: Config, venv_py: str, webui_data: str,
                            "MODEL_ORDER_LIST": order_ids})
             except Exception:
                 pass
-        ok(f"Open WebUI turnkey: {len(profs)} chat profiles, raw models hidden, "
+        ok(f"Open WebUI turnkey: {len(profs)} chat models renamed to friendly tiers, "
            f"default = {default_id or 'n/a'}.")
     except Exception as exc:
         warn(f"Open WebUI pre-config skipped ({exc}); the UI still works.")
