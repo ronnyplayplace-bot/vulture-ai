@@ -41,6 +41,32 @@ import json
 from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 
+
+# --- offline fast-path (must run BEFORE the fastembed import reads the env) ---
+def _cache_has_model(cache_dir: str) -> bool:
+    """True if a completed model snapshot (an .onnx file) is already cached."""
+    if not cache_dir or not os.path.isdir(cache_dir):
+        return False
+    for root, _dirs, files in os.walk(cache_dir):
+        if any(f.endswith(".onnx") for f in files):
+            return True
+    return False
+
+
+def _early_cache_dir() -> str:
+    """CACHE_DIR resolution, duplicated here because it is needed pre-import."""
+    base = os.environ.get("LOCALAPPDATA", "") if os.name == "nt" else ""
+    if not base:
+        base = os.path.join(os.path.expanduser("~"), ".local", "share")
+    return os.getenv("FASTEMBED_CACHE_PATH") or os.path.join(base, "VultureAI", "rag", "cache")
+
+
+if _cache_has_model(_early_cache_dir()):
+    # The model is fully cached -> never touch the network on boot. Without this
+    # a stalled HuggingFace metadata request hangs the server for minutes at
+    # "Waiting for application startup" (observed live: CDN socket in CloseWait).
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 from qdrant_client import QdrantClient
@@ -126,10 +152,28 @@ def embed_query(text: str) -> List[float]:
 async def lifespan(app: FastAPI):
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
-    emb = TextEmbedding(model_name=EMBED_MODEL, cache_dir=CACHE_DIR)
+    offline = bool(os.environ.get("HF_HUB_OFFLINE"))
+    print(f"[rag] loading embedding model ({EMBED_MODEL}"
+          f"{', offline from cache' if offline else ', may download ~90 MB on first run'}) ...",
+          flush=True)
+    try:
+        emb = TextEmbedding(model_name=EMBED_MODEL, cache_dir=CACHE_DIR)
+    except Exception:
+        if not offline:
+            raise
+        # Cache looked complete but wasn't -- flip back online and retry once.
+        print("[rag] cached model unusable -- retrying online ...", flush=True)
+        os.environ.pop("HF_HUB_OFFLINE", None)
+        try:
+            from huggingface_hub import constants as _hfc
+            _hfc.HF_HUB_OFFLINE = False
+        except Exception:
+            pass
+        emb = TextEmbedding(model_name=EMBED_MODEL, cache_dir=CACHE_DIR)
     state["emb"] = emb
     state["dim"] = len(list(emb.embed(["dimension probe"]))[0])
     # Always embedded/local: a Qdrant *folder*, never a network server.
+    print(f"[rag] opening local store ({QDRANT_PATH}) ...", flush=True)
     os.makedirs(QDRANT_PATH, exist_ok=True)
     client = QdrantClient(path=QDRANT_PATH)
     state["client"] = client
