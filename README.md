@@ -144,4 +144,4 @@ Built on the shoulders of ComfyUI, Ollama, Open WebUI, Aider, FLUX, Stable
 Diffusion, ReActor, LivePortrait, Qdrant and many more.
 Full list in [NOTICE](NOTICE). 🙏
 
-Built by [Ronny](https://overlkd.com) ([LinkedIn](https://linkedin.com/in/DEIN-HANDLE)) — solo dev, freelance web design & AI tooling. Open to freelance work and collaborations.
+Built by [Ronny](https://overlkd.com) ([LinkedIn](https://linkedin.com/in/rfischer87)) — solo dev, freelance web design & AI tooling. Open to freelance work and collaborations.
